@@ -11,6 +11,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SimpleDropdown, SimpleDropdownItem } from "@/components/ui/simple-dropdown"
 import { ArrowUpDown, ChevronDown, ExternalLink, Search, Filter } from "lucide-react"
 import { cn } from "@/lib/utils"
+import dynamic from "next/dynamic";
+
+const MiniSpark = dynamic(() => import("@/components/MiniSpark"), { 
+  ssr: false,
+  loading: () => <div className="w-[100px] h-8 bg-muted/20 rounded animate-pulse" />
+});
 
 type SortField = "protocol" | "chain" | "stablecoin" | "apyBase" | "apyReward" | "apyNet" | "tvlUsd"
 type SortDirection = "asc" | "desc"
@@ -24,70 +30,59 @@ export default function StablecoinYieldDashboard() {
   const [sortField, setSortField] = useState<SortField>("apyNet")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [lastUpdated, setLastUpdated] = useState<string>("")
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
 
-  // Load data
+  // Load data with auto-refresh
   useEffect(() => {
     async function load() {
       try {
-        setIsLoading(true)
+        setIsUpdating(true)
         const res = await fetch("/api/yields", { cache: "no-store" })
         const json = await res.json()
-        console.log("Loaded data:", json.rows?.length || 0, "items")
-        console.log("Sample data item:", json.rows?.[0])
         setData(json.rows || [])
+        setLastUpdated(new Date().toLocaleString())
+        setIsInitialLoad(false)
+        
+        // Debug: Log first item to see data structure
+        if (json.rows && json.rows.length > 0) {
+          console.log("Sample data item:", json.rows[0]);
+          console.log("Available properties:", Object.keys(json.rows[0]));
+        }
+        setTimeout(() => setIsUpdating(false), 500)
       } catch (err) {
         console.error("Failed to fetch yields", err)
-      } finally {
-        setIsLoading(false)
+        setIsUpdating(false)
       }
     }
     load()
-  }, [])
-
-  // Timestamp (client-only to avoid hydration mismatch)
-  useEffect(() => {
-    const update = () => setLastUpdated(new Date().toLocaleString())
-    update()
-    const interval = setInterval(update, 60_000)
+    const interval = setInterval(load, 30000)
     return () => clearInterval(interval)
   }, [])
 
   // Dynamic options (filter out falsy / duplicates)
   const chainOptions = useMemo(() => {
-    const options = Array.from(new Set(data.map((d: any) => d.chain).filter(Boolean))).sort()
-    console.log("Chain options:", options)
-    return options
+    return Array.from(new Set(data.map((d: any) => d.chain).filter(Boolean))).sort()
   }, [data])
-  
+
   const stablecoinOptions = useMemo(() => {
-    const options = Array.from(new Set(data.map((d: any) => d.stablecoin).filter(Boolean))).sort()
-    console.log("Stablecoin options:", options)
-    return options
+    return Array.from(new Set(data.map((d: any) => d.stablecoin).filter(Boolean))).sort()
   }, [data])
 
   // Normalized Sets for fast membership tests
-  const chainSet = useMemo(
-    () => new Set(selectedChains.map((c) => c.toLowerCase())),
-    [selectedChains]
-  )
-  const stableSet = useMemo(
-    () => new Set(selectedStablecoins.map((s) => s.toUpperCase())),
-    [selectedStablecoins]
-  )
+  const chainSet = useMemo(() => new Set(selectedChains.map((c) => c.toLowerCase())), [selectedChains])
+  const stableSet = useMemo(() => new Set(selectedStablecoins.map((s) => s.toUpperCase())), [selectedStablecoins])
 
   const filteredAndSortedData = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
 
     const filtered = data.filter((item: any) => {
       const protocol = String(item.protocol || "").toLowerCase()
-      const chain = String(item.chain || "")
-      const chainLower = chain.toLowerCase()
+      const chainLower = String(item.chain || "").toLowerCase()
       const stable = String(item.stablecoin || "")
       const stableUpper = stable.toUpperCase()
 
-      const matchesSearch =
-        protocol.includes(q) || chainLower.includes(q) || stable.toLowerCase().includes(q)
-
+      const matchesSearch = protocol.includes(q) || chainLower.includes(q) || stable.toLowerCase().includes(q)
       const matchesChain = chainSet.size === 0 || chainSet.has(chainLower)
       const matchesStablecoin = stableSet.size === 0 || stableSet.has(stableUpper)
 
@@ -98,13 +93,11 @@ export default function StablecoinYieldDashboard() {
       let aValue = a[sortField]
       let bValue = b[sortField]
 
-      // strings
       if (typeof aValue === "string" && typeof bValue === "string") {
         const A = aValue.toLowerCase()
         const B = bValue.toLowerCase()
         return sortDirection === "asc" ? A.localeCompare(B) : B.localeCompare(A)
       }
-      // numbers (null/undefined -> 0)
       const A = Number(aValue) || 0
       const B = Number(bValue) || 0
       return sortDirection === "asc" ? A - B : B - A
@@ -168,10 +161,9 @@ export default function StablecoinYieldDashboard() {
                   placeholder="Search protocols, chains, or stablecoins..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 bg-blue-50 border-blue-200 text-blue-900 placeholder:text-blue-400 focus:border-blue-500 focus:ring-blue-200"
                 />
               </div>
-
 
               {/* Chain Filter */}
               <SimpleDropdown
@@ -190,15 +182,12 @@ export default function StablecoinYieldDashboard() {
                     <SimpleDropdownItem
                       key={chain}
                       onClick={() => {
-                        console.log("[CHAIN CLICKED]", { chain, selectedChains })
                         setSelectedChains((prev) =>
-                          prev.includes(chain)
-                            ? prev.filter((c) => c !== chain)
-                            : [...prev, chain]
+                          prev.includes(chain) ? prev.filter((c) => c !== chain) : [...prev, chain]
                         )
                       }}
                     >
-                      {selectedChains.includes(chain) && "✓ "}{chain}
+                      {selectedChains.includes(chain) && "✓ "} {chain}
                     </SimpleDropdownItem>
                   ))
                 )}
@@ -221,15 +210,12 @@ export default function StablecoinYieldDashboard() {
                     <SimpleDropdownItem
                       key={stablecoin}
                       onClick={() => {
-                        console.log("[STABLE CLICKED]", { stablecoin, selectedStablecoins })
                         setSelectedStablecoins((prev) =>
-                          prev.includes(stablecoin)
-                            ? prev.filter((s) => s !== stablecoin)
-                            : [...prev, stablecoin]
+                          prev.includes(stablecoin) ? prev.filter((s) => s !== stablecoin) : [...prev, stablecoin]
                         )
                       }}
                     >
-                      {selectedStablecoins.includes(stablecoin) && "✓ "}{stablecoin}
+                      {selectedStablecoins.includes(stablecoin) && "✓ "} {stablecoin}
                     </SimpleDropdownItem>
                   ))
                 )}
@@ -244,9 +230,7 @@ export default function StablecoinYieldDashboard() {
                     key={chain}
                     variant="secondary"
                     className="cursor-pointer"
-                    onClick={() =>
-                      setSelectedChains((prev) => prev.filter((c) => c !== chain))
-                    }
+                    onClick={() => setSelectedChains((prev) => prev.filter((c) => c !== chain))}
                   >
                     {chain} ×
                   </Badge>
@@ -256,9 +240,7 @@ export default function StablecoinYieldDashboard() {
                     key={stablecoin}
                     variant="secondary"
                     className="cursor-pointer"
-                    onClick={() =>
-                      setSelectedStablecoins((prev) => prev.filter((s) => s !== stablecoin))
-                    }
+                    onClick={() => setSelectedStablecoins((prev) => prev.filter((s) => s !== stablecoin))}
                   >
                     {stablecoin} ×
                   </Badge>
@@ -271,10 +253,16 @@ export default function StablecoinYieldDashboard() {
         {/* Data Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Yield Opportunities</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                Yield Opportunities
+                {isUpdating && <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>}
+              </CardTitle>
+              <div className="text-sm text-muted-foreground">Last updated: {lastUpdated}</div>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
-            {isLoading ? (
+            {isInitialLoad ? (
               <div className="p-6">
                 <div className="space-y-4">
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -312,34 +300,46 @@ export default function StablecoinYieldDashboard() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <Table>
+                <style jsx>{`
+                  .table-cell-padding {
+                    --cell-padding: 2rem;
+                  }
+                  .protocol-cell {
+                    padding-left: var(--cell-padding);
+                  }
+                  .link-cell {
+                    padding-right: var(--cell-padding);
+                  }
+                `}</style>
+                <Table className={cn("table-cell-padding transition-all duration-300", isUpdating && "bg-blue-50/30")}>
                   <TableHeader className="sticky top-0 bg-card z-10">
                     <TableRow>
-                      <TableHead>
-                        <Button
-                          variant="ghost"
-                          onClick={() => handleSort("protocol")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent"
-                        >
-                          Protocol
-                          <ArrowUpDown className="ml-2 h-4 w-4" />
-                        </Button>
+                      <TableHead className="text-left pl-8">
+                        <div className="flex items-center font-semibold">
+                          <button
+                            onClick={() => handleSort("protocol")}
+                            className="flex items-center hover:bg-muted/50 rounded px-2 py-1 -ml-2"
+                          >
+                            Protocol
+                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                          </button>
+                        </div>
                       </TableHead>
-                      <TableHead>
+                      <TableHead className="text-center">
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("chain")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent"
+                          className="h-auto p-0 font-semibold hover:bg-transparent w-full justify-center"
                         >
                           Chain
                           <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
                       </TableHead>
-                      <TableHead>
+                      <TableHead className="text-center">
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("stablecoin")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent"
+                          className="h-auto p-0 font-semibold hover:bg-transparent w-full justify-center"
                         >
                           Stablecoin
                           <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -349,7 +349,7 @@ export default function StablecoinYieldDashboard() {
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("apyBase")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent"
+                          className="h-auto p-0 font-semibold hover:bg-transparent w-full justify-end"
                         >
                           Base APY
                           <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -359,7 +359,7 @@ export default function StablecoinYieldDashboard() {
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("apyReward")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent"
+                          className="h-auto p-0 font-semibold hover:bg-transparent w-full justify-end"
                         >
                           Reward APY
                           <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -369,7 +369,7 @@ export default function StablecoinYieldDashboard() {
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("apyNet")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent"
+                          className="h-auto p-0 font-semibold hover:bg-transparent w-full justify-end"
                         >
                           Net APY
                           <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -379,44 +379,67 @@ export default function StablecoinYieldDashboard() {
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("tvlUsd")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent"
+                          className="h-auto p-0 font-semibold hover:bg-transparent w-full justify-end"
                         >
                           TVL
                           <ArrowUpDown className="ml-2 h-4 w-4" />
                         </Button>
                       </TableHead>
-                      <TableHead className="w-[100px]">Link</TableHead>
+                      {/* NEW: Trend column */}
+                      <TableHead className="text-right">Trend</TableHead>
+                      <TableHead className="w-[100px] text-center link-cell">Link</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredAndSortedData.map((item: any, index: number) => (
                       <TableRow key={index} className="hover:bg-muted/50">
-                        <TableCell className="font-medium">{item.protocol}</TableCell>
-                        <TableCell>
+                        <TableCell className="text-left font-medium pl-8">{item.protocol}</TableCell>
+                        <TableCell className="text-center">
                           <Badge variant="outline">{item.chain}</Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <Badge variant="secondary">{item.stablecoin}</Badge>
                         </TableCell>
-                        <TableCell className="text-right font-mono">{formatPercentage(item.apyBase)}</TableCell>
                         <TableCell className="text-right font-mono">
-                          <span className="text-accent">{formatPercentage(item.apyReward)}</span>
+                          <span className="transition-all duration-500 ease-in-out">
+                            {formatPercentage(item.apyBase)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          <span className="text-accent transition-all duration-500 ease-in-out">
+                            {formatPercentage(item.apyReward)}
+                          </span>
                         </TableCell>
                         <TableCell className="text-right font-mono font-semibold">
                           <span
                             className={cn(
-                              item.apyNet >= 7
-                                ? "text-green-600"
-                                : item.apyNet >= 5
-                                ? "text-yellow-600"
-                                : "text-foreground",
+                              "transition-all duration-500 ease-in-out",
+                              item.apyNet >= 7 ? "text-green-600" : item.apyNet >= 5 ? "text-yellow-600" : "text-foreground",
                             )}
                           >
                             {formatPercentage(item.apyNet)}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(item.tvlUsd)}</TableCell>
-                        <TableCell>
+                        <TableCell className="text-right font-mono">
+                          <span className="transition-all duration-500 ease-in-out">
+                            {formatCurrency(item.tvlUsd)}
+                          </span>
+                        </TableCell>
+
+                        {/* NEW: sparkline cell */}
+                        <TableCell className="text-right">
+                          <MiniSpark
+                            poolId={item.poolId}
+                            project={item.protocol}
+                            chain={item.chain}
+                            addr={item.poolAddress}
+                            days={7}
+                            width={100}
+                            height={32}
+                          />
+                        </TableCell>
+
+                        <TableCell className="text-center link-cell">
                           <Button variant="ghost" size="sm" asChild className="h-8 w-8 p-0">
                             <a
                               href={item.link}
