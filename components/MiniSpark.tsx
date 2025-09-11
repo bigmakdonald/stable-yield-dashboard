@@ -27,14 +27,21 @@ export default function MiniSpark({
       chain: chain || "",
       addr: addr || "",
       days: String(days),
-    }).toString();
+    });
+
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('no_fallback') === '1') {
+        qs.set('no_fallback', '1');
+      }
+    }
 
     async function load() {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
         
-        const r = await fetch(`/api/yields/pool-history?${qs}`, { 
+        const r = await fetch(`/api/yields/pool-history?${qs.toString()}`, { 
           cache: "no-store",
           signal: controller.signal
         });
