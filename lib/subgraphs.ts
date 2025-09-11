@@ -4,7 +4,7 @@
 // 2) import { endpointFor, SUBGRAPHS } from "@/lib/subgraphs"
 // 3) const url = endpointFor("uniswap-v3", "base")  -> gateway URL
 //    (returns null if we don't have that mapping)
-const GRAPH_API_KEY = process.env.GRAPH_API_KEY || "36cdb2155d9cb4096130fb83dd73a720"
+const GRAPH_API_KEY = process.env.GRAPH_API_KEY;
 
 type Chain =
   | "ethereum" | "arbitrum" | "optimism" | "base" | "polygon" | "avalanche" | "gnosis";

@@ -4,218 +4,327 @@ import { endpointFor } from "@/lib/subgraphs";
 
 export const dynamic = "force-dynamic";
 
-// GraphQL queries (Uniswap V2 / V3)
-const Q_V3 = gql`
-  query PoolDay($pool: ID!, $first: Int!) {
+const Q_V3_YIELD = gql`
+  query PoolDayYield($pool: ID!, $first: Int!, $skip: Int!) {
     poolDayDatas(
       where: { pool: $pool }
       orderBy: date
       orderDirection: desc
       first: $first
+      skip: $skip
     ) {
       date
-      tvlUSD    # some deployments use tvlUSD
-      liquidity # some use liquidity; we won't use unless tvlUSD missing
+      tvlUSD
+      volumeUSD
+      feesUSD
     }
   }
 `;
 
-const Q_V2 = gql`
-  query PairDay($pair: ID!, $first: Int!) {
+const Q_V2_YIELD = gql`
+  query PairDayYield($pair: ID!, $first: Int!, $skip: Int!) {
     pairDayDatas(
       where: { pairAddress: $pair }
       orderBy: date
       orderDirection: desc
       first: $first
+      skip: $skip
     ) {
       date
       reserveUSD
+      dailyVolumeUSD
     }
   }
 `;
 
-type Pt = { date: string; tvlUsd: number };
+const Q_AAVE_RESERVE = gql`
+  query ReserveHistory($reserve: ID!, $first: Int!) {
+    reserveParamsHistoryItems(
+      where: { reserve: $reserve }
+      orderBy: timestamp
+      orderDirection: desc
+      first: $first
+    ) {
+      timestamp
+      liquidityRate
+      variableBorrowRate
+      utilizationRate
+    }
+  }
+`;
 
-async function fromGraph(
+type YieldPoint = { date: string; yieldValue: number };
+
+async function fromGraphWithRetry(
   protocol: string,
   chain: string,
   poolAddress: string | null,
-  days: number
-): Promise<Pt[] | null> {
+  days: number,
+  maxRetries: number = 3
+): Promise<YieldPoint[] | null> {
   if (!poolAddress) return null;
   
-  try {
-    const endpoint = endpointFor(protocol as any, chain as any);
-    if (!endpoint) {
-      console.log(`No endpoint for ${protocol} on ${chain}`);
-      return null;
-    }
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const endpoint = endpointFor(protocol as any, chain as any);
+      if (!endpoint) {
+        console.log(`No endpoint for ${protocol} on ${chain}`);
+        return null;
+      }
 
-    console.log(`Trying Graph endpoint: ${endpoint}`);
-    const client = graph(endpoint);
-    const id = poolAddress.toLowerCase();
-    const first = Math.max(days + 5, 40); // ask for a little more, then slice
-
-    if (protocol.toLowerCase() === "uniswap-v3") {
-      const data = await client.request<{ poolDayDatas: any[] }>(Q_V3, { pool: id, first });
-      const rows = data?.poolDayDatas ?? [];
-      if (!rows.length) return null;
-      // Normalize: prefer tvlUSD; if absent, drop (you could derive from liquidity if you want)
-      return rows
-        .map(r => ({ date: new Date(r.date * 1000).toISOString().slice(0, 10), tvlUsd: Number(r.tvlUSD ?? 0) }))
-        .filter(p => Number.isFinite(p.tvlUsd) && p.tvlUsd > 0)
-        .reverse()
-        .slice(-days);
-    }
-
-    if (protocol.toLowerCase() === "uniswap-v2") {
-      const data = await client.request<{ pairDayDatas: any[] }>(Q_V2, { pair: id, first });
-      const rows = data?.pairDayDatas ?? [];
-      if (!rows.length) return null;
-      return rows
-        .map(r => ({ date: new Date(r.date * 1000).toISOString().slice(0, 10), tvlUsd: Number(r.reserveUSD ?? 0) }))
-        .filter(p => Number.isFinite(p.tvlUsd) && p.tvlUsd > 0)
-        .reverse()
-        .slice(-days);
-    }
-
-    // add other protocol handlers here…
-
-    return null;
-  } catch (error) {
-    console.log(`Graph query failed for ${protocol} on ${chain}:`, error);
-    return null;
-  }
-}
-
-async function fromLlama(poolId: string, days: number): Promise<Pt[] | null> {
-  if (!poolId) return null;
-  
-  // TEMPORARY: Generate mock data since Llama API is protected by Cloudflare
-  console.log(`Generating mock data for pool: ${poolId}`);
-  
-  const mockData: Pt[] = [];
-  const baseValue = 100000 + (poolId.charCodeAt(0) * 1000); // Use poolId to generate consistent base value
-  
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const variation = (Math.random() - 0.5) * 0.1; // ±5% variation
-    const value = baseValue * (1 + variation);
-    
-    mockData.push({
-      date: date.toISOString().slice(0, 10),
-      tvlUsd: Math.round(value)
-    });
-  }
-  
-  console.log(`Generated ${mockData.length} mock data points`);
-  return mockData;
-  
-  // ORIGINAL LLAMA CODE (commented out due to Cloudflare protection):
-  /*
-  try {
-    console.log(`Trying Llama for pool: ${poolId}`);
-    const candidates = [
-      `https://yields.llama.fi/chart/${encodeURIComponent(poolId)}`,
-      `https://yields.llama.fi/chart/pool/${encodeURIComponent(poolId)}`,
-    ];
-    
-    for (const ep of candidates) {
-      console.log(`Trying Llama endpoint: ${ep}`);
-      const r = await fetch(ep, { 
-        cache: "no-store",
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      });
-      if (!r.ok) {
-        console.log(`Llama endpoint failed: ${r.status} ${r.statusText}`);
-        continue;
+      const apiKey = process.env.GRAPH_API_KEY;
+      const client = graph(endpoint, apiKey);
+      
+      const result = await queryProtocolData(client, protocol, poolAddress, days);
+      
+      if (result && result.length > 0) {
+        console.log(`Graph success: ${result.length} data points for ${protocol}`);
+        return result;
       }
       
-      const data = await r.json();
-      console.log(`Llama response for ${poolId}:`, typeof data, Array.isArray(data) ? data.length : Object.keys(data));
-      const raw = Array.isArray(data) ? data : (data?.data ?? []);
-      console.log(`Raw data length: ${raw.length}`);
-      const series = raw
-        .map((pt: any) => ({
-          date: new Date(pt.timestamp).toISOString().slice(0, 10),
-          tvlUsd: Number(pt.tvlUsd ?? pt.tvl_usd ?? 0),
-        }))
-        .filter((p: Pt) => Number.isFinite(p.tvlUsd) && p.tvlUsd >= 0)
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .slice(-days);
+      return null;
+    } catch (error: any) {
+      const isLastAttempt = attempt === maxRetries;
+      const isRetryableError = error.response?.status >= 500 || error.code === 'NETWORK_ERROR';
+      
+      console.log(`Graph query attempt ${attempt} failed for ${protocol} on ${chain}:`, error.message);
+      
+      if (isLastAttempt || !isRetryableError) {
+        console.log(`Final failure for ${protocol} on ${chain}`);
+        return null;
+      }
+      
+      const delay = Math.pow(2, attempt - 1) * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  return null;
+}
+
+async function queryProtocolData(
+  client: any,
+  protocol: string,
+  poolAddress: string,
+  days: number
+): Promise<YieldPoint[] | null> {
+  const id = poolAddress.toLowerCase();
+  const first = Math.max(days + 5, 40);
+
+  switch (protocol.toLowerCase()) {
+    case "uniswap-v3":
+      return await queryUniswapV3Yield(client, id, first, days);
+    case "uniswap-v2":
+      return await queryUniswapV2Yield(client, id, first, days);
+    case "aave-v3":
+      return await queryAaveYield(client, id, first, days);
+    default:
+      console.log(`Unsupported protocol: ${protocol}`);
+      return null;
+  }
+}
+
+async function queryUniswapV3Yield(
+  client: any,
+  poolId: string,
+  first: number,
+  days: number
+): Promise<YieldPoint[] | null> {
+  const data = await client.request<{ poolDayDatas: any[] }>(Q_V3_YIELD, { 
+    pool: poolId, 
+    first,
+    skip: 0 
+  });
+  
+  const rows = data?.poolDayDatas ?? [];
+  if (!rows.length) return null;
+  
+  return rows
+    .map((r: any) => {
+      const tvl = Number(r.tvlUSD ?? 0);
+      const fees = Number(r.feesUSD ?? 0);
+      const dailyYield = tvl > 0 ? (fees / tvl) * 365 * 100 : 0;
+      
+      return {
+        date: new Date(r.date * 1000).toISOString().slice(0, 10),
+        yieldValue: dailyYield
+      };
+    })
+    .filter((p: YieldPoint) => Number.isFinite(p.yieldValue) && p.yieldValue >= 0)
+    .reverse()
+    .slice(-days);
+}
+
+async function queryUniswapV2Yield(
+  client: any,
+  poolId: string,
+  first: number,
+  days: number
+): Promise<YieldPoint[] | null> {
+  const data = await client.request<{ pairDayDatas: any[] }>(Q_V2_YIELD, { 
+    pair: poolId, 
+    first,
+    skip: 0 
+  });
+  
+  const rows = data?.pairDayDatas ?? [];
+  if (!rows.length) return null;
+  
+  return rows
+    .map((r: any) => {
+      const tvl = Number(r.reserveUSD ?? 0);
+      const volume = Number(r.dailyVolumeUSD ?? 0);
+      const dailyYield = tvl > 0 ? (volume * 0.003 / tvl) * 365 * 100 : 0;
+      
+      return {
+        date: new Date(r.date * 1000).toISOString().slice(0, 10),
+        yieldValue: dailyYield
+      };
+    })
+    .filter((p: YieldPoint) => Number.isFinite(p.yieldValue) && p.yieldValue >= 0)
+    .reverse()
+    .slice(-days);
+}
+
+async function queryAaveYield(
+  client: any,
+  reserveId: string,
+  first: number,
+  days: number
+): Promise<YieldPoint[] | null> {
+  const data = await client.request<{ reserveParamsHistoryItems: any[] }>(Q_AAVE_RESERVE, { 
+    reserve: reserveId, 
+    first 
+  });
+  
+  const rows = data?.reserveParamsHistoryItems ?? [];
+  if (!rows.length) return null;
+  
+  return rows
+    .map((r: any) => {
+      const liquidityRate = Number(r.liquidityRate ?? 0);
+      const yieldValue = liquidityRate / 1e25 * 100;
+      
+      return {
+        date: new Date(r.timestamp * 1000).toISOString().slice(0, 10),
+        yieldValue: yieldValue
+      };
+    })
+    .filter((p: YieldPoint) => Number.isFinite(p.yieldValue) && p.yieldValue >= 0)
+    .reverse()
+    .slice(-days);
+}
+
+async function fromLlamaWithRetry(poolId: string, days: number): Promise<YieldPoint[] | null> {
+  if (!poolId) return null;
+  
+  try {
+    console.log(`Trying DeFiLlama for pool: ${poolId}`);
+    const endpoints = [
+      `https://yields.llama.fi/chart/${encodeURIComponent(poolId)}`,
+      `https://yields.llama.fi/poolHistory/${encodeURIComponent(poolId)}`
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint, { 
+          cache: "no-store",
+          headers: {
+            'User-Agent': 'StablecoinYieldDashboard/1.0',
+            'Accept': 'application/json'
+          },
+          signal: AbortSignal.timeout(10000)
+        });
         
-      if (series.length) {
-        console.log(`Llama success: ${series.length} data points`);
-        return series;
+        if (!response.ok) continue;
+        
+        const data = await response.json();
+        const rawData = Array.isArray(data) ? data : (data?.data ?? []);
+        
+        const series = rawData
+          .map((pt: any) => ({
+            date: new Date(pt.timestamp).toISOString().slice(0, 10),
+            yieldValue: Number(pt.apy ?? pt.apyBase ?? 0)
+          }))
+          .filter((p: YieldPoint) => Number.isFinite(p.yieldValue) && p.yieldValue >= 0)
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .slice(-days);
+          
+        if (series.length > 0) {
+          console.log(`DeFiLlama success: ${series.length} data points`);
+          return series;
+        }
+      } catch (error) {
+        console.log(`DeFiLlama endpoint ${endpoint} failed:`, error);
+        continue;
       }
     }
     
-    console.log(`No Llama data found for pool: ${poolId}`);
     return null;
   } catch (error) {
-    console.log(`Llama query failed:`, error);
+    console.log(`DeFiLlama query failed:`, error);
     return null;
   }
-  */
 }
 
-/**
- * GET /api/yields/pool-history?pool=<llamaPoolId>&project=<llamaProjectSlug>&chain=<Chain>&addr=<0x...>&days=30&debug=1
- */
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const pool = url.searchParams.get("pool") || "";
-  const project = url.searchParams.get("project") || ""; // "uniswap-v3", "uniswap-v2", "aave-v3", ...
-  const chain = url.searchParams.get("chain") || "";     // "Ethereum", "Base", ...
+  const project = url.searchParams.get("project") || "";
+  const chain = url.searchParams.get("chain") || "";
   const addr = (url.searchParams.get("addr") || "").toLowerCase();
   const days = Math.min(Math.max(Number(url.searchParams.get("days") || 30), 7), 365);
   const debug = url.searchParams.get("debug") === "1";
 
   if (debug) {
-    console.log(`Pool history request:`, { pool, project, chain, addr, days, debug });
+    console.log(`Pool history request:`, { pool, project, chain, addr, days });
   }
 
   try {
     let used = "graph";
     let endpoint = "";
-    let addrLower = (addr || "").toLowerCase();
     
-    // 1) try The Graph first (better for accurate pool time series)
-    let series = await fromGraph(project, chain, addr, days);
+    let series = await fromGraphWithRetry(project, chain, addr, days);
 
-    // 2) fallback to Llama so every row still gets a sparkline
     if (!series) {
-      console.log("Graph failed, trying Llama fallback");
+      console.log("Graph failed, trying DeFiLlama fallback");
       used = "llama";
-      series = await fromLlama(pool, days);
+      series = await fromLlamaWithRetry(pool, days);
     } else {
-      // capture the final endpoint used so you can see it in the response
       endpoint = endpointFor(project as any, chain as any) || "";
     }
 
-    if (debug) {
-      console.log(`Final result: ${series?.length || 0} data points`);
-    }
+    const formattedSeries = series?.map(point => ({
+      date: point.date,
+      tvlUsd: point.yieldValue
+    })) || [];
 
-    const payload: any = { series: series || [], updatedAt: new Date().toISOString() };
+    const payload: any = { 
+      series: formattedSeries, 
+      updatedAt: new Date().toISOString(),
+      dataType: "yield"
+    };
+    
     if (debug) {
       payload.debug = { 
         used, 
         project, 
         chain, 
-        addrLower, 
+        addrLower: addr,
         endpoint,
         poolId: pool,
-        days
+        days,
+        originalDataPoints: series?.length || 0
       };
     }
     
     return NextResponse.json(payload);
   } catch (e: any) {
     console.error("Pool history error:", e);
-    return NextResponse.json({ error: e?.message || "Failed" }, { status: 500 });
+    return NextResponse.json({ 
+      error: e?.message || "Failed",
+      series: [],
+      dataType: "yield"
+    }, { status: 500 });
   }
 }
