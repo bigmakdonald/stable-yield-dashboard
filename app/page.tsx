@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SimpleDropdown, SimpleDropdownItem } from "@/components/ui/simple-dropdown"
 import { ArrowUpDown, ChevronDown, ExternalLink, Search, Filter } from "lucide-react"
 import { cn } from "@/lib/utils"
-import dynamic from "next/dynamic";
+import dynamic from "next/dynamic"
+import { WalletConnection } from "@/components/WalletConnection"
 
 const MiniSpark = dynamic(() => import("@/components/MiniSpark"), { 
   ssr: false,
@@ -138,7 +139,10 @@ export default function StablecoinYieldDashboard() {
               <h1 className="text-3xl font-bold tracking-tight text-foreground">Stablecoin Yield Dashboard</h1>
               <p className="text-sm text-muted-foreground">Compare yields across DeFi protocols</p>
             </div>
-            <div className="text-sm text-muted-foreground">Data last updated: {lastUpdated}</div>
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-muted-foreground">Data last updated: {lastUpdated}</div>
+              <WalletConnection />
+            </div>
           </div>
         </div>
       </header>
