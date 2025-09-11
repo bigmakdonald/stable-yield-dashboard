@@ -103,7 +103,7 @@ async function fromGraphWithRetry(
 }
 
 async function queryProtocolData(
-  client: any,
+  client: ReturnType<typeof graph>,
   protocol: string,
   poolAddress: string,
   days: number
@@ -125,7 +125,7 @@ async function queryProtocolData(
 }
 
 async function queryUniswapV3Yield(
-  client: any,
+  client: ReturnType<typeof graph>,
   poolId: string,
   first: number,
   days: number
@@ -156,7 +156,7 @@ async function queryUniswapV3Yield(
 }
 
 async function queryUniswapV2Yield(
-  client: any,
+  client: ReturnType<typeof graph>,
   poolId: string,
   first: number,
   days: number
@@ -187,7 +187,7 @@ async function queryUniswapV2Yield(
 }
 
 async function queryAaveYield(
-  client: any,
+  client: ReturnType<typeof graph>,
   reserveId: string,
   first: number,
   days: number
@@ -247,7 +247,7 @@ async function fromLlamaWithRetry(poolId: string, days: number): Promise<YieldPo
             yieldValue: Number(pt.apy ?? pt.apyBase ?? 0)
           }))
           .filter((p: YieldPoint) => Number.isFinite(p.yieldValue) && p.yieldValue >= 0)
-          .sort((a, b) => a.date.localeCompare(b.date))
+           .sort((a: YieldPoint, b: YieldPoint) => a.date.localeCompare(b.date))
           .slice(-days);
           
         if (series.length > 0) {
