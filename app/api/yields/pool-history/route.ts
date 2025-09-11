@@ -45,7 +45,7 @@ async function fromGraph(
   if (!poolAddress) return null;
   
   try {
-    const endpoint = endpointFor(protocol, chain);
+    const endpoint = endpointFor(protocol as any, chain as any);
     if (!endpoint) {
       console.log(`No endpoint for ${protocol} on ${chain}`);
       return null;
@@ -193,7 +193,7 @@ export async function GET(req: Request) {
       series = await fromLlama(pool, days);
     } else {
       // capture the final endpoint used so you can see it in the response
-      endpoint = endpointFor(project, chain) || "";
+      endpoint = endpointFor(project as any, chain as any) || "";
     }
 
     if (debug) {

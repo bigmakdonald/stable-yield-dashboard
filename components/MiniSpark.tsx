@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { ResponsiveContainer, LineChart, Line } from "recharts";
+import { ResponsiveContainer, LineChart, Line, YAxis } from "recharts";
 
 type Pt = { date: string; tvlUsd: number };
 
@@ -83,11 +83,33 @@ export default function MiniSpark({
     );
   }
 
+  // Calculate min/max for auto-scaling
+  const values = series.map(d => d.tvlUsd);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const range = maxValue - minValue;
+  
+  // Handle edge case where all values are the same
+  const padding = range === 0 ? maxValue * 0.1 : range * 0.1;
+  const domain = range === 0 
+    ? [Math.max(0, minValue - padding), maxValue + padding]
+    : [Math.max(0, minValue - padding), maxValue + padding];
+
   return (
     <div style={{ width, height }}>
       <ResponsiveContainer>
         <LineChart data={series}>
-          <Line type="monotone" dataKey="tvlUsd" dot={false} strokeWidth={2} />
+          <YAxis 
+            domain={domain}
+            hide
+          />
+          <Line 
+            type="monotone" 
+            dataKey="tvlUsd" 
+            dot={false} 
+            strokeWidth={2}
+            stroke="#3b82f6"
+          />
         </LineChart>
       </ResponsiveContainer>
     </div>
