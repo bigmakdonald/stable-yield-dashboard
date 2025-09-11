@@ -153,7 +153,7 @@ export const SwapDrawer: React.FC = () => {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Price impact</span>
-                      <span>{(parseFloat(priceData.estimatedPriceImpact) * 100).toFixed(2)}%</span>
+                      <span>{priceData.estimatedPriceImpact ? (parseFloat(priceData.estimatedPriceImpact) * 100).toFixed(2) + '%' : 'N/A'}</span>
                     </div>
                     {!priceData.liquidityAvailable && (
                       <div className="flex items-center gap-2 text-amber-600">

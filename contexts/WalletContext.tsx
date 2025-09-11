@@ -72,14 +72,14 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       window.ethereum.on('accountsChanged', handleAccountsChanged)
 
       return () => {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged)
+        window.ethereum?.removeListener('accountsChanged', handleAccountsChanged)
       }
     }
   }, [])
 
   const checkConnection = async () => {
     try {
-      const accounts = await window.ethereum.request({ method: 'eth_accounts' })
+      const accounts = await window.ethereum!.request({ method: 'eth_accounts' })
       if (accounts.length > 0) {
         setWalletState(prev => ({
           ...prev,
@@ -105,7 +105,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setWalletState(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
-      const accounts = await window.ethereum.request({
+      const accounts = await window.ethereum!.request({
         method: 'eth_requestAccounts',
       })
 

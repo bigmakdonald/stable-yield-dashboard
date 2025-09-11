@@ -98,6 +98,7 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }
 
   const fetchPrice = async () => {
+    console.log('fetchPrice called:', { selectedRow: swapState.selectedRow?.chain, sellAmount: swapState.sellAmount, address, isConnected: !!address });
     if (!swapState.selectedRow || !swapState.sellAmount || !address) return
 
     setSwapState(prev => ({ ...prev, isLoading: true, error: null }))
