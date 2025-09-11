@@ -13,6 +13,8 @@ import { ArrowUpDown, ChevronDown, ExternalLink, Search, Filter } from "lucide-r
 import { cn } from "@/lib/utils"
 import dynamic from "next/dynamic"
 import { WalletConnection } from "@/components/WalletConnection"
+import { SwapDrawer } from "@/components/SwapDrawer"
+import { useSwap } from "@/contexts/SwapContext"
 
 const MiniSpark = dynamic(() => import("@/components/MiniSpark"), { 
   ssr: false,
@@ -23,6 +25,7 @@ type SortField = "protocol" | "chain" | "stablecoin" | "apyBase" | "apyReward" |
 type SortDirection = "asc" | "desc"
 
 export default function StablecoinYieldDashboard() {
+  const { openSwap } = useSwap()
   const [data, setData] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -396,7 +399,11 @@ export default function StablecoinYieldDashboard() {
                   </TableHeader>
                   <TableBody>
                     {filteredAndSortedData.map((item: any, index: number) => (
-                      <TableRow key={index} className="hover:bg-muted/50">
+                      <TableRow 
+                        key={index} 
+                        className="hover:bg-muted/50 cursor-pointer"
+                        onClick={() => openSwap(item)}
+                      >
                         <TableCell className="text-left font-medium pl-8">{item.protocol}</TableCell>
                         <TableCell className="text-center">
                           <Badge variant="outline">{item.chain}</Badge>
@@ -450,6 +457,7 @@ export default function StablecoinYieldDashboard() {
                               target="_blank"
                               rel="noopener noreferrer"
                               aria-label={`Visit ${item.protocol}`}
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <ExternalLink className="h-4 w-4" />
                             </a>
@@ -463,6 +471,7 @@ export default function StablecoinYieldDashboard() {
             )}
           </CardContent>
         </Card>
+        <SwapDrawer />
       </main>
     </div>
   )
