@@ -275,9 +275,10 @@ export async function GET(req: Request) {
   const addr = (url.searchParams.get("addr") || "").toLowerCase();
   const days = Math.min(Math.max(Number(url.searchParams.get("days") || 30), 7), 365);
   const debug = url.searchParams.get("debug") === "1";
+  const noFallback = url.searchParams.get("no_fallback") === "1";
 
   if (debug) {
-    console.log(`Pool history request:`, { pool, project, chain, addr, days });
+    console.log(`Pool history request:`, { pool, project, chain, addr, days, noFallback });
   }
 
   try {
@@ -286,10 +287,13 @@ export async function GET(req: Request) {
     
     let series = await fromGraphWithRetry(project, chain, addr, days);
 
-    if (!series) {
+    if (!series && !noFallback) {
       console.log("Graph failed, trying DeFiLlama fallback");
       used = "llama";
       series = await fromLlamaWithRetry(pool, days);
+    } else if (!series && noFallback) {
+      console.log("Graph failed, but fallback disabled by no_fallback=1");
+      used = "graph_failed";
     } else {
       endpoint = endpointFor(project as any, chain as any) || "";
     }

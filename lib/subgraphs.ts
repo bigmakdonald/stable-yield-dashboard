@@ -30,7 +30,7 @@ export const SUBGRAPHS: Record<Proto, Partial<Record<Chain, Entry>>> = {
   // (Example IDs below verified via Explorer pages.)
   // Docs: https://docs.uniswap.org/api/subgraph/overview
   "uniswap-v3": {
-    ethereum: { id: "4cKy6QQMc5tpfdx8yxfYeb9TLZmgLQe44ddW1G7NwkA6" }, // Uniswap V3 Ethereum :contentReference[oaicite:1]{index=1}
+    ethereum: { id: "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV" }, // Uniswap V3 Ethereum (updated 2025-09-11) :contentReference[oaicite:1]{index=1}
     base:     { id: "FUbEPQw1oMghy39fwWBFY5fE6MXPXZQtjncQy2cXdrNS" }, // Uniswap V3 Base :contentReference[oaicite:2]{index=2}
     polygon:  { id: "3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCbhjm" }, // Uniswap V3 Polygon :contentReference[oaicite:3]{index=3}
     arbitrum: { id: "FQ6JYszEKApsBpAmiHesRsd9Ygc6mzmpNRANeVQFYoVX" }, // Uniswap V3 Arbitrum :contentReference[oaicite:4]{index=4}
@@ -40,7 +40,7 @@ export const SUBGRAPHS: Record<Proto, Partial<Record<Chain, Entry>>> = {
 
   // ========== Uniswap V2 ==========
   "uniswap-v2": {
-    ethereum: { id: "EYCKATKGBKLWvSfwvBjzfCBmGwYNdVkduYXVivCsLRFu" }, // Uniswap V2 mainnet :contentReference[oaicite:7]{index=7}
+    ethereum: { id: "A3Np3RQbaBA6oKJgiwDJeo5T3zrYfGHPWFYayMwtNDum" }, // Uniswap V2 mainnet (updated 2025-09-11) :contentReference[oaicite:7]{index=7}
     // polygon/arbitrum have community v2 subgraphs; verify in Explorer if you need them. :contentReference[oaicite:8]{index=8}
   },
 
@@ -65,7 +65,7 @@ export const SUBGRAPHS: Record<Proto, Partial<Record<Chain, Entry>>> = {
   // Balancer documents exact Graph Network IDs per chain (official docs below).
   // Docs: https://docs.balancer.fi/data-and-analytics/data-and-analytics/subgraph.html
   "balancer-v2": {
-    ethereum: { id: "C4tijcwi6nThKJYBmT5JaYK2As2kJGADs89AoQaCnYz7" },
+    ethereum: { id: "C4ayEZP2yTXRAB8vSaTrgN4m9anTe9Mdm2ViyiAuV9TV" }, // Balancer V2 Ethereum (updated 2025-09-11)
     arbitrum: { id: "EjSsjATNpZexLhozmDTe9kBHpZUt1GKjWdpZ2P9xmhsv" },
     optimism: { id: "DwreTHTzN3kV6szWr7Ldt6VwnGjtmKTKcYT9aDk37MEs" },
     base:     { id: "42QYdE4P8ZMKgPx4Mkw1Vnx3Zf6AEtWFVoeet1HZ4ntB" },
