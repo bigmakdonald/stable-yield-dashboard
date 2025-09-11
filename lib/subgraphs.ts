@@ -30,7 +30,7 @@ export const SUBGRAPHS: Record<Proto, Partial<Record<Chain, Entry>>> = {
   // (Example IDs below verified via Explorer pages.)
   // Docs: https://docs.uniswap.org/api/subgraph/overview
   "uniswap-v3": {
-    ethereum: { id: "4cKy6QQMc5tpfdx8yxfYeb9TLZmgLQe44ddW1G7NwkA6" }, // Uniswap V3 Ethereum :contentReference[oaicite:1]{index=1}
+    ethereum: { id: "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV" }, // Uniswap V3 Ethereum (updated 2025-09-11) :contentReference[oaicite:1]{index=1}
     base:     { id: "FUbEPQw1oMghy39fwWBFY5fE6MXPXZQtjncQy2cXdrNS" }, // Uniswap V3 Base :contentReference[oaicite:2]{index=2}
     polygon:  { id: "3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCbhjm" }, // Uniswap V3 Polygon :contentReference[oaicite:3]{index=3}
     arbitrum: { id: "FQ6JYszEKApsBpAmiHesRsd9Ygc6mzmpNRANeVQFYoVX" }, // Uniswap V3 Arbitrum :contentReference[oaicite:4]{index=4}
