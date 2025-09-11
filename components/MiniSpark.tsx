@@ -83,14 +83,14 @@ export default function MiniSpark({
     );
   }
 
-  // Calculate min/max for auto-scaling
-  const values = series.map(d => d.tvlUsd);
+  // Calculate min/max for auto-scaling yield data
+  const values = series.map((d: any) => d.tvlUsd);
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
   const range = maxValue - minValue;
   
   // Handle edge case where all values are the same
-  const padding = range === 0 ? maxValue * 0.1 : range * 0.1;
+  const padding = range === 0 ? Math.max(maxValue * 0.1, 0.1) : range * 0.1;
   const domain = range === 0 
     ? [Math.max(0, minValue - padding), maxValue + padding]
     : [Math.max(0, minValue - padding), maxValue + padding];
@@ -108,7 +108,7 @@ export default function MiniSpark({
             dataKey="tvlUsd" 
             dot={false} 
             strokeWidth={2}
-            stroke="#3b82f6"
+            stroke="#10b981"
           />
         </LineChart>
       </ResponsiveContainer>
