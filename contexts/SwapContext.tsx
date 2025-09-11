@@ -98,8 +98,8 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }
 
   const fetchPrice = async () => {
-    console.log('fetchPrice called:', { selectedRow: swapState.selectedRow?.chain, sellAmount: swapState.sellAmount, address, isConnected: !!address });
-    if (!swapState.selectedRow || !swapState.sellAmount || !address) return
+    console.log('fetchPrice called:', { selectedRow: swapState.selectedRow?.chain, sellAmount: swapState.sellAmount, address, isConnected });
+    if (!swapState.selectedRow || !swapState.sellAmount || !address || !isConnected) return
 
     setSwapState(prev => ({ ...prev, isLoading: true, error: null }))
 
@@ -170,7 +170,14 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }
 
   const executeSwap = async () => {
-    if (!swapState.selectedRow || !swapState.sellAmount || !address) return
+    if (!swapState.selectedRow || !swapState.sellAmount || !address || !isConnected) {
+      setSwapState(prev => ({
+        ...prev,
+        error: 'Please connect your wallet to continue',
+        isLoading: false,
+      }))
+      return
+    }
 
     setSwapState(prev => ({ ...prev, isLoading: true, error: null }))
 
@@ -178,10 +185,14 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const chainId = getChainId(swapState.selectedRow.chain)
       const usdcAddress = getUSDCAddress(chainId!)
       
+      if (!chainId || !usdcAddress) {
+        throw new Error('Unsupported chain')
+      }
+
       const params = new URLSearchParams({
-        chainId: chainId!.toString(),
+        chainId: chainId.toString(),
         sellToken: ETH_SENTINEL,
-        buyToken: usdcAddress!,
+        buyToken: usdcAddress,
         sellAmount: (parseFloat(swapState.sellAmount) * 1e18).toString(),
         taker: address,
       })
