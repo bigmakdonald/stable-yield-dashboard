@@ -57,12 +57,15 @@ export async function GET(request: Request) {
     const apiKey = process.env.GRAPH_API_KEY;
     const client = graph(endpoint, apiKey);
     
-    const testQuery = protocol === "aave-v3" ? Q_AAVE_RESERVE_TEST : Q_V3_YIELD_TEST;
-    const variables = protocol === "aave-v3" 
-      ? { reserve: poolId, first: 5 }
-      : { pool: poolId, first: 5, skip: 0 };
+    let data: any;
     
-    const data = await client.request(testQuery, variables);
+    if (protocol === "aave-v3") {
+      const variables = { reserve: poolId, first: 5 };
+      data = await client.request<{ reserveParamsHistoryItems: any[] }>(Q_AAVE_RESERVE_TEST, variables);
+    } else {
+      const variables = { pool: poolId, first: 5, skip: 0 };
+      data = await client.request<{ poolDayDatas: any[] }>(Q_V3_YIELD_TEST, variables);
+    }
     
     return NextResponse.json({
       endpoint,
@@ -70,7 +73,7 @@ export async function GET(request: Request) {
       chain,
       poolId,
       success: true,
-      dataPoints: Array.isArray(data[Object.keys(data)[0]]) ? data[Object.keys(data)[0]].length : 0,
+      dataPoints: data ? (Array.isArray(Object.values(data)[0]) ? (Object.values(data)[0] as any[]).length : 0) : 0,
       sampleData: data
     });
   } catch (error: any) {
