@@ -140,12 +140,13 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         buyToken: tokenAddress,
         sellAmount: (parseFloat(swapState.sellAmount) * 1e18).toString(),
         taker: address,
+        recipient: address,
       })
 
       console.log('fetchPrice API params:', { 
         chainId: chainId.toString(),
         sellToken: ETH_SENTINEL,
-        buyToken: usdcAddress,
+        buyToken: tokenAddress,
         sellAmount: (parseFloat(swapState.sellAmount) * 1e18).toString(),
         taker: address,
         takerType: typeof address,
@@ -311,6 +312,7 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         buyToken: tokenAddress,
         sellAmount: sellAmountInWei,
         taker: actualAddress,
+        recipient: actualAddress,
       })
 
       console.log('executeSwap API params:', { 

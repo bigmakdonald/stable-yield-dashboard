@@ -31,7 +31,7 @@ export default function StablecoinYieldDashboard() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedChains, setSelectedChains] = useState<string[]>([])
   const [selectedStablecoins, setSelectedStablecoins] = useState<string[]>([])
-  const [sortField, setSortField] = useState<SortField>("apyNet")
+  const [sortField, setSortField] = useState<SortField>("tvlUsd")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [lastUpdated, setLastUpdated] = useState<string>("")
   const [isUpdating, setIsUpdating] = useState(false)
