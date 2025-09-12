@@ -74,9 +74,24 @@ export const SwapDrawer: React.FC = () => {
     <Sheet open={isOpen} onOpenChange={closeSwap}>
       <SheetContent side="right" className="w-[400px] sm:w-[540px]">
         <SheetHeader>
-          <SheetTitle>Swap to {selectedRow.stablecoin}</SheetTitle>
+          <SheetTitle>
+            {priceData ? (
+              <>
+                Swap {priceData.sellTokenSymbol || 'ETH'} → {priceData.buyTokenSymbol || selectedRow.stablecoin}
+              </>
+            ) : (
+              `Swap to ${selectedRow.stablecoin}`
+            )}
+          </SheetTitle>
           <SheetDescription>
-            Swap ETH for {selectedRow.stablecoin} on {selectedRow.chain}
+            {priceData ? (
+              <>
+                Trading {priceData.sellTokenSymbol || 'ETH'} for {priceData.buyTokenSymbol || selectedRow.stablecoin} 
+                on {selectedRow.chain} • {selectedRow.protocol}
+              </>
+            ) : (
+              `Swap ETH for ${selectedRow.stablecoin} on ${selectedRow.chain}`
+            )}
           </SheetDescription>
         </SheetHeader>
 
@@ -111,9 +126,36 @@ export const SwapDrawer: React.FC = () => {
                 </div>
               </div>
 
+              {/* Trading Pair Info Card */}
+              {priceData && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <h4 className="font-medium text-blue-900">Trading Pair</h4>
+                      <p className="text-sm text-blue-700">
+                        {priceData.sellTokenSymbol || 'ETH'} → {priceData.buyTokenSymbol || selectedRow.stablecoin}
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        Via {selectedRow.protocol} on {selectedRow.chain}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-blue-900">
+                        {priceData.grossPrice ? 
+                          `1 ${priceData.sellTokenSymbol || 'ETH'} = ${parseFloat(priceData.grossPrice).toFixed(4)} ${priceData.buyTokenSymbol || selectedRow.stablecoin}` : 
+                          'Calculating...'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">You pay</label>
+                  <label className="text-sm font-medium">
+                    You pay ({priceData?.sellTokenSymbol || 'ETH'})
+                  </label>
                   <div className="relative">
                     <Input
                       type="number"
@@ -133,7 +175,9 @@ export const SwapDrawer: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">You receive</label>
+                  <label className="text-sm font-medium">
+                    You receive ({priceData?.buyTokenSymbol || selectedRow.stablecoin})
+                  </label>
                   <div className="relative">
                     <Input
                       type="text"

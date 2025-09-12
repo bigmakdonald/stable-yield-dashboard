@@ -136,10 +136,10 @@ async function queryUniswapV3Yield(
     skip: 0 
   });
   
-  const rows = data?.poolDayDatas ?? [];
-  if (!rows.length) return null;
+    const rows = data?.poolDayDatas ?? [];
+    if (!rows.length) return null;
   
-  return rows
+    return rows
     .map((r: any) => {
       const tvl = Number(r.tvlUSD ?? 0);
       const fees = Number(r.feesUSD ?? 0);
@@ -151,9 +151,9 @@ async function queryUniswapV3Yield(
       };
     })
     .filter((p: YieldPoint) => Number.isFinite(p.yieldValue) && p.yieldValue >= 0)
-    .reverse()
-    .slice(-days);
-}
+      .reverse()
+      .slice(-days);
+  }
 
 async function queryUniswapV2Yield(
   client: ReturnType<typeof graph>,
@@ -167,10 +167,10 @@ async function queryUniswapV2Yield(
     skip: 0 
   });
   
-  const rows = data?.pairDayDatas ?? [];
-  if (!rows.length) return null;
+    const rows = data?.pairDayDatas ?? [];
+    if (!rows.length) return null;
   
-  return rows
+    return rows
     .map((r: any) => {
       const tvl = Number(r.reserveUSD ?? 0);
       const volume = Number(r.dailyVolumeUSD ?? 0);
@@ -182,9 +182,9 @@ async function queryUniswapV2Yield(
       };
     })
     .filter((p: YieldPoint) => Number.isFinite(p.yieldValue) && p.yieldValue >= 0)
-    .reverse()
-    .slice(-days);
-}
+      .reverse()
+      .slice(-days);
+  }
 
 async function queryAaveYield(
   client: ReturnType<typeof graph>,
@@ -221,7 +221,7 @@ async function fromLlamaWithRetry(poolId: string, days: number): Promise<YieldPo
   try {
     console.log(`Trying DeFiLlama for pool: ${poolId}`);
     const endpoints = [
-      `https://yields.llama.fi/chart/${encodeURIComponent(poolId)}`,
+    `https://yields.llama.fi/chart/${encodeURIComponent(poolId)}`,
       `https://yields.llama.fi/poolHistory/${encodeURIComponent(poolId)}`
     ];
     
@@ -242,13 +242,13 @@ async function fromLlamaWithRetry(poolId: string, days: number): Promise<YieldPo
         const rawData = Array.isArray(data) ? data : (data?.data ?? []);
         
         const series = rawData
-          .map((pt: any) => ({
+      .map((pt: any) => ({
             date: new Date(pt.timestamp).toISOString().slice(0, 10),
             yieldValue: Number(pt.apy ?? pt.apyBase ?? 0)
-          }))
+      }))
           .filter((p: YieldPoint) => Number.isFinite(p.yieldValue) && p.yieldValue >= 0)
            .sort((a: YieldPoint, b: YieldPoint) => a.date.localeCompare(b.date))
-          .slice(-days);
+      .slice(-days);
           
         if (series.length > 0) {
           console.log(`DeFiLlama success: ${series.length} data points`);
@@ -263,7 +263,7 @@ async function fromLlamaWithRetry(poolId: string, days: number): Promise<YieldPo
     return null;
   } catch (error) {
     console.log(`DeFiLlama query failed:`, error);
-    return null;
+  return null;
   }
 }
 
