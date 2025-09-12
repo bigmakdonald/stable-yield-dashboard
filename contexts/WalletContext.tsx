@@ -45,7 +45,14 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.ethereum) {
-      checkConnection()
+      // Check if user was previously connected
+      const wasConnected = localStorage.getItem('wallet_connected') === 'true'
+      console.log('Wallet init - wasConnected:', wasConnected)
+
+      if (wasConnected) {
+        console.log('Attempting to restore wallet connection...')
+        checkConnection()
+      }
     }
   }, [])
 
@@ -94,6 +101,27 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           address: accounts[0],
           error: null,
         }))
+      } else {
+        // If no accounts but user was previously connected, try to request accounts
+        const wasConnected = localStorage.getItem('wallet_connected') === 'true'
+        if (wasConnected) {
+          console.log('No accounts found but user was previously connected, trying to reconnect...')
+          try {
+            const newAccounts = await window.ethereum!.request({ method: 'eth_requestAccounts' })
+            if (newAccounts.length > 0) {
+              console.log('Reconnected successfully:', { address: newAccounts[0] });
+              setWalletState(prev => ({
+                ...prev,
+                isConnected: true,
+                address: newAccounts[0],
+                error: null,
+              }))
+            }
+          } catch (reconnectError) {
+            console.log('Reconnect failed, clearing localStorage')
+            localStorage.removeItem('wallet_connected')
+          }
+        }
       }
     } catch (error) {
       console.error('Error checking wallet connection:', error)

@@ -34,7 +34,8 @@ export const SwapDrawer: React.FC = () => {
   } = useSwap()
 
   const { isConnected, address } = useWallet()
-  
+
+  // Debug wallet state
   console.log('SwapDrawer wallet state:', { isConnected, address, addressType: typeof address, addressLength: address?.length })
 
   useEffect(() => {
@@ -90,7 +91,7 @@ export const SwapDrawer: React.FC = () => {
                 {selectedRow.chain} is not supported for swaps. Please select a different protocol.
               </p>
             </div>
-          ) : !isConnected ? (
+          ) : !isConnected || !address ? (
             <div className="p-4 bg-muted border rounded-md text-center">
               <p className="text-sm text-muted-foreground">
                 Please connect your wallet to continue
