@@ -334,9 +334,19 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error(data.error || 'Failed to get quote')
       }
 
+      console.log('Transaction data from 0x API:', data.transaction);
+      
+      // Ensure the transaction has the correct from address
+      const transaction = {
+        ...data.transaction,
+        from: actualAddress
+      };
+      
+      console.log('Transaction being sent to MetaMask:', transaction);
+
       const txHash = await window.ethereum!.request({
         method: 'eth_sendTransaction',
-        params: [data.transaction],
+        params: [transaction],
       })
 
       closeSwap()
