@@ -25,6 +25,7 @@ export async function GET(request: Request) {
       {
         headers: {
           "0x-api-key": ZERO_X_API_KEY,
+          "0x-version": "v1",
         },
       }
     );

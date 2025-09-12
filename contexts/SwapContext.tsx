@@ -143,15 +143,7 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         recipient: address,
       })
 
-      console.log('fetchPrice API params:', { 
-        chainId: chainId.toString(),
-        sellToken: ETH_SENTINEL,
-        buyToken: tokenAddress,
-        sellAmount: (parseFloat(swapState.sellAmount) * 1e18).toString(),
-        taker: address,
-        takerType: typeof address,
-        takerLength: address?.length
-      });
+      // Debug logging removed for performance
 
       const response = await fetch(`/api/0x/price?${params}`)
       const data = await response.json()
@@ -315,43 +307,15 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         recipient: actualAddress,
       })
 
-      console.log('executeSwap API params:', { 
-        chainId: chainId.toString(),
-        sellToken: ETH_SENTINEL,
-        buyToken: tokenAddress,
-        sellAmount: sellAmountInWei,
-        sellAmountOriginal: swapState.sellAmount,
-        sellAmountParsed: parseFloat(swapState.sellAmount),
-        sellAmountInWei: sellAmountInWei,
-        stablecoin: swapState.selectedRow.stablecoin,
-        taker: actualAddress,
-        takerType: typeof actualAddress,
-        takerLength: actualAddress?.length
-      });
-
-      console.log('Full URL being called:', `/api/0x/quote?${params}`);
-      console.log('Params.toString():', params.toString());
+      // Debug logging removed for performance
 
       const response = await fetch(`/api/0x/quote?${params}`)
       const data = await response.json()
       
-      console.log('API Response status:', response.status);
-      console.log('API Response data:', data);
-      console.log('Routing info:', {
-        sources: data.sources,
-        protocols: data.protocols,
-        sellTokenSymbol: data.sellTokenSymbol,
-        buyTokenSymbol: data.buyTokenSymbol
-      });
-
       if (!response.ok) {
+        console.error('0x API error:', data.error || 'Failed to get quote');
         throw new Error(data.error || 'Failed to get quote')
       }
-
-      console.log('Transaction data from 0x API:', data.transaction);
-      console.log('Transaction value (should be sellAmountInWei):', data.transaction?.value);
-      console.log('Expected value:', sellAmountInWei);
-      console.log('Values match?', data.transaction?.value === sellAmountInWei);
       
       // Ensure the transaction has the correct from address
       const transaction = {
