@@ -107,16 +107,19 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addressLength: address?.length 
     });
     
-    if (!swapState.selectedRow || !swapState.sellAmount || !address || !isConnected) {
-      console.log('fetchPrice validation failed:', { 
+    if (!swapState.selectedRow || !swapState.sellAmount) {
+      console.log('fetchPrice validation failed - missing required data:', { 
         hasSelectedRow: !!swapState.selectedRow,
-        hasSellAmount: !!swapState.sellAmount,
+        hasSellAmount: !!swapState.sellAmount
+      });
+      return
+    }
+    
+    if (!address || !isConnected) {
+      console.log('fetchPrice validation failed - wallet not connected:', { 
         hasAddress: !!address,
         isConnected,
-        reason: !swapState.selectedRow ? 'no selectedRow' : 
-                !swapState.sellAmount ? 'no sellAmount' :
-                !address ? 'no address' :
-                !isConnected ? 'not connected' : 'unknown'
+        reason: !address ? 'no address' : !isConnected ? 'not connected' : 'unknown'
       });
       return
     }
@@ -209,16 +212,24 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addressLength: address?.length 
     });
     
-    if (!swapState.selectedRow || !swapState.sellAmount || !address || !isConnected) {
-      console.log('executeSwap validation failed:', { 
+    if (!swapState.selectedRow || !swapState.sellAmount) {
+      console.log('executeSwap validation failed - missing required data:', { 
         hasSelectedRow: !!swapState.selectedRow,
-        hasSellAmount: !!swapState.sellAmount,
+        hasSellAmount: !!swapState.sellAmount
+      });
+      setSwapState(prev => ({
+        ...prev,
+        error: 'Missing required swap data',
+        isLoading: false,
+      }))
+      return
+    }
+    
+    if (!address || !isConnected) {
+      console.log('executeSwap validation failed - wallet not connected:', { 
         hasAddress: !!address,
         isConnected,
-        reason: !swapState.selectedRow ? 'no selectedRow' : 
-                !swapState.sellAmount ? 'no sellAmount' :
-                !address ? 'no address' :
-                !isConnected ? 'not connected' : 'unknown'
+        reason: !address ? 'no address' : !isConnected ? 'not connected' : 'unknown'
       });
       setSwapState(prev => ({
         ...prev,
