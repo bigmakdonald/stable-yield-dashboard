@@ -180,12 +180,29 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setSwapState(prev => ({ ...prev, isLoading: true }))
 
     try {
+      // Get the actual address, fallback to MetaMask if needed
+      let actualAddress = address;
+      if (!actualAddress) {
+        try {
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+          if (accounts && accounts.length > 0) {
+            actualAddress = accounts[0];
+          }
+        } catch (error) {
+          console.error('Error getting address for approval:', error);
+        }
+      }
+
+      if (!actualAddress) {
+        throw new Error('No wallet address available for approval');
+      }
+
       const { spender, allowance } = swapState.priceData.issues.allowance
       
       const txHash = await window.ethereum.request({
         method: 'eth_sendTransaction',
         params: [{
-          from: address,
+          from: actualAddress,
           to: swapState.priceData.sellTokenAddress,
           data: `0x095ea7b3${spender.slice(2).padStart(64, '0')}${allowance.slice(2).padStart(64, '0')}`,
         }],
@@ -203,14 +220,35 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }
 
   const executeSwap = async () => {
+    console.log('=== EXECUTE SWAP DEBUG ===');
     console.log('executeSwap called:', { 
       selectedRow: !!swapState.selectedRow, 
       sellAmount: swapState.sellAmount, 
       address, 
       isConnected, 
       addressType: typeof address,
-      addressLength: address?.length 
+      addressLength: address?.length,
+      addressValue: address,
+      walletContextAddress: address,
+      windowEthereum: typeof window !== 'undefined' ? !!window.ethereum : 'no window',
+      currentAccounts: typeof window !== 'undefined' && window.ethereum ? 'checking...' : 'no window'
     });
+
+    // Double-check wallet connection right before swap
+    if (typeof window !== 'undefined' && window.ethereum) {
+      try {
+        const currentAccounts = await window.ethereum.request({ method: 'eth_accounts' });
+        console.log('Current accounts from MetaMask:', { currentAccounts, length: currentAccounts?.length });
+        
+        if (currentAccounts && currentAccounts.length > 0 && currentAccounts[0] !== address) {
+          console.log('WARNING: Address mismatch! Context says:', address, 'MetaMask says:', currentAccounts[0]);
+          // Update the context with the actual current address
+          // This is a workaround for timing issues
+        }
+      } catch (error) {
+        console.error('Error checking current accounts:', error);
+      }
+    }
     
     if (!swapState.selectedRow || !swapState.sellAmount) {
       console.log('executeSwap validation failed - missing required data:', { 
@@ -225,11 +263,27 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return
     }
     
-    if (!address || !isConnected) {
+    // Try to get address directly from MetaMask if context address is missing
+    let actualAddress = address;
+    if (!actualAddress && typeof window !== 'undefined' && window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts && accounts.length > 0) {
+          actualAddress = accounts[0];
+          console.log('Got address directly from MetaMask:', actualAddress);
+        }
+      } catch (error) {
+        console.error('Error getting address from MetaMask:', error);
+      }
+    }
+
+    if (!actualAddress || !isConnected) {
       console.log('executeSwap validation failed - wallet not connected:', { 
-        hasAddress: !!address,
+        hasAddress: !!actualAddress,
         isConnected,
-        reason: !address ? 'no address' : !isConnected ? 'not connected' : 'unknown'
+        contextAddress: address,
+        actualAddress: actualAddress,
+        reason: !actualAddress ? 'no address' : !isConnected ? 'not connected' : 'unknown'
       });
       setSwapState(prev => ({
         ...prev,
@@ -254,7 +308,7 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         sellToken: ETH_SENTINEL,
         buyToken: usdcAddress,
         sellAmount: (parseFloat(swapState.sellAmount) * 1e18).toString(),
-        taker: address,
+        taker: actualAddress,
       })
 
       console.log('executeSwap API params:', { 
@@ -262,13 +316,19 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         sellToken: ETH_SENTINEL,
         buyToken: usdcAddress,
         sellAmount: (parseFloat(swapState.sellAmount) * 1e18).toString(),
-        taker: address,
-        takerType: typeof address,
-        takerLength: address?.length
+        taker: actualAddress,
+        takerType: typeof actualAddress,
+        takerLength: actualAddress?.length
       });
+
+      console.log('Full URL being called:', `/api/0x/quote?${params}`);
+      console.log('Params.toString():', params.toString());
 
       const response = await fetch(`/api/0x/quote?${params}`)
       const data = await response.json()
+      
+      console.log('API Response status:', response.status);
+      console.log('API Response data:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to get quote')
