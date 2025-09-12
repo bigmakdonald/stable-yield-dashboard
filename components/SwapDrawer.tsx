@@ -87,7 +87,10 @@ export const SwapDrawer: React.FC = () => {
             {priceData ? (
               <>
                 Trading {priceData.sellTokenSymbol || 'ETH'} for {priceData.buyTokenSymbol || selectedRow.stablecoin} 
-                on {selectedRow.chain} • {selectedRow.protocol}
+                on {selectedRow.chain} • {priceData.sources ? 
+                  priceData.sources.map((source: any) => source.name || source).join(', ') :
+                  (priceData.protocols ? priceData.protocols.join(', ') : selectedRow.protocol)
+                }
               </>
             ) : (
               `Swap ETH for ${selectedRow.stablecoin} on ${selectedRow.chain}`
@@ -136,7 +139,10 @@ export const SwapDrawer: React.FC = () => {
                         {priceData.sellTokenSymbol || 'ETH'} → {priceData.buyTokenSymbol || selectedRow.stablecoin}
                       </p>
                       <p className="text-xs text-blue-600">
-                        Via {selectedRow.protocol} on {selectedRow.chain}
+                        Via {priceData.sources ? 
+                          priceData.sources.map((source: any) => source.name || source).join(', ') :
+                          (priceData.protocols ? priceData.protocols.join(', ') : selectedRow.protocol)
+                        } on {selectedRow.chain}
                       </p>
                     </div>
                     <div className="text-right">

@@ -329,6 +329,12 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       console.log('API Response status:', response.status);
       console.log('API Response data:', data);
+      console.log('Routing info:', {
+        sources: data.sources,
+        protocols: data.protocols,
+        sellTokenSymbol: data.sellTokenSymbol,
+        buyTokenSymbol: data.buyTokenSymbol
+      });
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to get quote')
