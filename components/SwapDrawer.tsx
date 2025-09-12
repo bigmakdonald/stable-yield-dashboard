@@ -33,7 +33,9 @@ export const SwapDrawer: React.FC = () => {
     switchChain,
   } = useSwap()
 
-  const { isConnected } = useWallet()
+  const { isConnected, address } = useWallet()
+  
+  console.log('SwapDrawer wallet state:', { isConnected, address, addressType: typeof address, addressLength: address?.length })
 
   useEffect(() => {
     if (!sellAmount || parseFloat(sellAmount) <= 0) return
