@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react'
 import { useWallet } from './WalletContext'
-import { getChainId, getUSDCAddress, ETH_SENTINEL, CHAIN_CONFIGS } from '@/lib/swap-config'
+import { getChainId, getTokenAddress, ETH_SENTINEL, CHAIN_CONFIGS } from '@/lib/swap-config'
 
 interface SwapState {
   isOpen: boolean;
@@ -128,16 +128,16 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     try {
       const chainId = getChainId(swapState.selectedRow.chain)
-      const usdcAddress = getUSDCAddress(chainId!)
+      const tokenAddress = getTokenAddress(chainId!, swapState.selectedRow.stablecoin)
       
-      if (!chainId || !usdcAddress) {
-        throw new Error('Unsupported chain')
+      if (!chainId || !tokenAddress) {
+        throw new Error('Unsupported chain or token')
       }
 
       const params = new URLSearchParams({
         chainId: chainId.toString(),
         sellToken: ETH_SENTINEL,
-        buyToken: usdcAddress,
+        buyToken: tokenAddress,
         sellAmount: (parseFloat(swapState.sellAmount) * 1e18).toString(),
         taker: address,
       })
@@ -297,25 +297,31 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     try {
       const chainId = getChainId(swapState.selectedRow.chain)
-      const usdcAddress = getUSDCAddress(chainId!)
+      const tokenAddress = getTokenAddress(chainId!, swapState.selectedRow.stablecoin)
       
-      if (!chainId || !usdcAddress) {
-        throw new Error('Unsupported chain')
+      if (!chainId || !tokenAddress) {
+        throw new Error('Unsupported chain or token')
       }
 
+      const sellAmountInWei = (parseFloat(swapState.sellAmount) * 1e18).toString();
+      
       const params = new URLSearchParams({
         chainId: chainId.toString(),
         sellToken: ETH_SENTINEL,
-        buyToken: usdcAddress,
-        sellAmount: (parseFloat(swapState.sellAmount) * 1e18).toString(),
+        buyToken: tokenAddress,
+        sellAmount: sellAmountInWei,
         taker: actualAddress,
       })
 
       console.log('executeSwap API params:', { 
         chainId: chainId.toString(),
         sellToken: ETH_SENTINEL,
-        buyToken: usdcAddress,
-        sellAmount: (parseFloat(swapState.sellAmount) * 1e18).toString(),
+        buyToken: tokenAddress,
+        sellAmount: sellAmountInWei,
+        sellAmountOriginal: swapState.sellAmount,
+        sellAmountParsed: parseFloat(swapState.sellAmount),
+        sellAmountInWei: sellAmountInWei,
+        stablecoin: swapState.selectedRow.stablecoin,
         taker: actualAddress,
         takerType: typeof actualAddress,
         takerLength: actualAddress?.length
@@ -341,6 +347,9 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       console.log('Transaction data from 0x API:', data.transaction);
+      console.log('Transaction value (should be sellAmountInWei):', data.transaction?.value);
+      console.log('Expected value:', sellAmountInWei);
+      console.log('Values match?', data.transaction?.value === sellAmountInWei);
       
       // Ensure the transaction has the correct from address
       const transaction = {

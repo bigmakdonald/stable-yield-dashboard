@@ -44,6 +44,24 @@ export function getUSDCAddress(chainId: number): string | null {
   return USDC_ADDRESSES[chainId] || null;
 }
 
+export function getUSDTAddress(chainId: number): string | null {
+  return USDT_ADDRESSES[chainId] || null;
+}
+
+export function getDAIAddress(chainId: number): string | null {
+  return DAI_ADDRESSES[chainId] || null;
+}
+
+export function getTokenAddress(chainId: number, symbol: string): string | null {
+  const upperSymbol = symbol.toUpperCase();
+  switch (upperSymbol) {
+    case 'USDC': return getUSDCAddress(chainId);
+    case 'USDT': return getUSDTAddress(chainId);
+    case 'DAI': return getDAIAddress(chainId);
+    default: return null;
+  }
+}
+
 export const CHAIN_CONFIGS: Record<number, any> = {
   1: { 
     chainId: "0x1", 
