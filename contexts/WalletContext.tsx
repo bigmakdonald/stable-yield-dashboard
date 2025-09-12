@@ -32,6 +32,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     isLoading: false,
     error: null,
   })
+  
+  console.log('WalletContext state update:', { isConnected: walletState.isConnected, address: walletState.address, addressType: typeof walletState.address, addressLength: walletState.address?.length })
 
   const [isMetaMaskInstalled, setIsMetaMaskInstalled] = useState(false)
 
@@ -50,7 +52,9 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.ethereum) {
       const handleAccountsChanged = (accounts: string[]) => {
+        console.log('handleAccountsChanged called:', { accounts, accountsLength: accounts.length });
         if (accounts.length === 0) {
+          console.log('Disconnecting wallet - no accounts');
           setWalletState(prev => ({
             ...prev,
             isConnected: false,
@@ -59,6 +63,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }))
           localStorage.removeItem('wallet_connected')
         } else {
+          console.log('Connecting wallet:', { address: accounts[0], addressType: typeof accounts[0] });
           setWalletState(prev => ({
             ...prev,
             address: accounts[0],
@@ -80,7 +85,9 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const checkConnection = async () => {
     try {
       const accounts = await window.ethereum!.request({ method: 'eth_accounts' })
+      console.log('checkConnection result:', { accounts, accountsLength: accounts.length });
       if (accounts.length > 0) {
+        console.log('Setting wallet connected:', { address: accounts[0], addressType: typeof accounts[0] });
         setWalletState(prev => ({
           ...prev,
           isConnected: true,
@@ -110,6 +117,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       })
 
       if (accounts.length > 0) {
+        console.log('connectWallet success:', { address: accounts[0], addressType: typeof accounts[0] });
         setWalletState({
           isConnected: true,
           address: accounts[0],
