@@ -259,11 +259,18 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error(message)
       }
       
-      // Ensure the transaction has the correct from address
+      // Build a sanitized transaction for MetaMask
+      // 0x may return decimal strings for numeric fields; MetaMask expects hex quantities
+      const sellValueWei = sellAmountInWei
       const transaction = {
-        ...data.transaction,
-        from: actualAddress
-      };
+        from: actualAddress,
+        to: data.transaction?.to,
+        data: data.transaction?.data,
+        // Always set value explicitly for native sells and convert to hex
+        value: (typeof sellValueWei === 'string'
+          ? `0x${BigInt(sellValueWei).toString(16)}`
+          : `0x${BigInt(String(sellValueWei)).toString(16)}`),
+      } as any
 
       const txHash = await window.ethereum!.request({
         method: 'eth_sendTransaction',

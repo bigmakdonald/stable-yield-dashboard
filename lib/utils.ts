@@ -21,3 +21,12 @@ export function toBaseUnits(amount: string, decimals: number): string {
   const result = negative ? (-(wholePart + fracPart)).toString() : (wholePart + fracPart).toString()
   return result
 }
+
+// Convert a base-10 string or bigint-like value to a hex quantity string (0x-prefixed)
+// Ensures no leading zeros and supports negative values where relevant (not used here)
+export function toHexQuantity(value: string | number | bigint): string {
+  const bn = typeof value === 'bigint' ? value : BigInt(value)
+  if (bn === 0n) return '0x0'
+  const hex = (bn < 0n ? (-bn) : bn).toString(16)
+  return bn < 0n ? `-0x${hex}` : `0x${hex}`
+}
