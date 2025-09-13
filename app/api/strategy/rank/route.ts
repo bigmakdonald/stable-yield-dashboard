@@ -85,3 +85,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: e?.message || "Failed" }, { status: 500 });
   }
 }
+
+export async function GET(req: Request) {
+  const url = new URL(req.url)
+  const risk = (url.searchParams.get("risk") || "Conservative") as any
+  const chains = (url.searchParams.get("chains") || "1")
+    .split(",").map(s => Number(s.trim())).filter(Boolean)
+  const stables = (url.searchParams.get("stables") || "USDC,USDT,DAI")
+    .split(",").map(s => s.trim().toUpperCase())
+  const minTvlUsd = Number(url.searchParams.get("minTvlUsd") || 5_000_000)
+  const slippageBps = Number(url.searchParams.get("slippageBps") || 50)
+  const maxCandidates = Number(url.searchParams.get("maxCandidates") || 10)
+
+  const body = { risk, chains, stables, minTvlUsd, slippageBps, maxCandidates }
+  return POST(new Request(req.url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }))
+}
