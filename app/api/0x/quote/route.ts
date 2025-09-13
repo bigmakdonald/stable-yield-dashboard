@@ -21,11 +21,11 @@ export async function GET(request: Request) {
 
   try {
     const response = await fetch(
-      `https://api.0x.org/swap/v1/quote?${params.toString()}`,
+      `https://api.0x.org/swap/allowance-holder/quote?${params.toString()}`,
       {
         headers: {
           "0x-api-key": ZERO_X_API_KEY,
-          "0x-version": "v1",
+          "0x-version": "v2",
         },
       }
     );

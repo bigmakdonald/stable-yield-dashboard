@@ -313,8 +313,10 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const data = await response.json()
       
       if (!response.ok) {
-        console.error('0x API error:', data.error || 'Failed to get quote');
-        throw new Error(data.error || 'Failed to get quote')
+        console.error('0x API quote error response:', data)
+        const details = typeof data?.details === 'string' ? data.details : (data?.details ? JSON.stringify(data.details) : '')
+        const message = `${data?.error || 'Failed to get quote'}${details ? ' - ' + details : ''}`
+        throw new Error(message)
       }
       
       // Ensure the transaction has the correct from address
