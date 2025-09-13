@@ -1,0 +1,1 @@
+* [33mdd5be50[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Surface 0x error details for price/quote (endpoint+url); client shows details on price errors too.

@@ -32,6 +32,8 @@ export async function GET(request: Request) {
       if (taker && !params.get("takerAddress")) {
         params.set("takerAddress", taker);
       }
+      // v1 expects 'ETH' for native token
+      params.set("sellToken", "ETH");
       params.delete("taker");
       params.delete("recipient");
     }
