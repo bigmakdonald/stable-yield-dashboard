@@ -1,0 +1,16 @@
+{
+  "protocols": {
+    "aave-v3": { "score": 0.15, "audited": true },
+    "compound-v3": { "score": 0.20, "audited": true },
+    "curve": { "score": 0.30 },
+    "yearn-vaults": { "score": 0.25 },
+    "uniswap-v3": { "score": 0.35 }
+  },
+  "chainBias": {
+    "Ethereum": 0.10,
+    "Arbitrum": 0.15,
+    "Base": 0.15,
+    "Optimism": 0.18,
+    "Polygon": 0.22
+  }
+}
