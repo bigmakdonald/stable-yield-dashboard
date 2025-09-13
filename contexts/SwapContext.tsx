@@ -149,7 +149,10 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch price')
+        console.error('0x API price error response:', data)
+        const details = typeof data?.details === 'string' ? data.details : (data?.details ? JSON.stringify(data.details) : '')
+        const message = `${data?.error || 'Failed to fetch price'}${details ? ' - ' + details : ''}`
+        throw new Error(message)
       }
 
       setSwapState(prev => ({

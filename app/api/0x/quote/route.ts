@@ -38,7 +38,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const response = await fetch(`${baseUrl}?${params.toString()}`, {
+    const url = `${baseUrl}?${params.toString()}`
+    const response = await fetch(url, {
       headers: {
         "0x-api-key": ZERO_X_API_KEY,
         "0x-version": isNativeSell ? "v1" : "v2",
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
     if (!response.ok) {
       const errorText = await response.text();
       return NextResponse.json(
-        { error: "0x API error", details: errorText },
+        { error: "0x API error", details: errorText, endpoint: baseUrl, url },
         { status: response.status }
       );
     }
