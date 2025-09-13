@@ -32,6 +32,8 @@ export async function GET(request: Request) {
       if (taker && !params.get("takerAddress")) {
         params.set("takerAddress", taker);
       }
+      params.delete("taker");
+      params.delete("recipient");
     }
 
     const response = await fetch(`${baseUrl}?${params.toString()}`,

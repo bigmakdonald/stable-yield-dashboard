@@ -32,6 +32,9 @@ export async function GET(request: Request) {
     if (taker && !params.get("takerAddress")) {
       params.set("takerAddress", taker);
     }
+    // Remove params not supported by v1
+    params.delete("taker");
+    params.delete("recipient");
   }
 
   try {
