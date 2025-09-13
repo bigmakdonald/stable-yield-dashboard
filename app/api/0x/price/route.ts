@@ -20,12 +20,25 @@ export async function GET(request: Request) {
   });
 
   try {
-    const response = await fetch(
-      `https://api.0x.org/swap/allowance-holder/price?${params.toString()}`,
+    const sellToken = params.get("sellToken")?.toLowerCase();
+    const isNativeSell = sellToken === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" || sellToken === "eth";
+    const baseUrl = isNativeSell
+      ? "https://api.0x.org/swap/v1/price"
+      : "https://api.0x.org/swap/allowance-holder/price";
+
+    // Map taker->takerAddress for v1 to improve route quality/validation
+    if (isNativeSell) {
+      const taker = params.get("taker");
+      if (taker && !params.get("takerAddress")) {
+        params.set("takerAddress", taker);
+      }
+    }
+
+    const response = await fetch(`${baseUrl}?${params.toString()}`,
       {
         headers: {
           "0x-api-key": ZERO_X_API_KEY,
-          "0x-version": "v2",
+          "0x-version": isNativeSell ? "v1" : "v2",
         },
       }
     );
