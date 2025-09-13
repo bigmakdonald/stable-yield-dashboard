@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react'
 import { useWallet } from './WalletContext'
 import { getChainId, getTokenAddress, ETH_SENTINEL, CHAIN_CONFIGS } from '@/lib/swap-config'
+import { toBaseUnits } from '@/lib/utils'
 
 interface SwapState {
   isOpen: boolean;
@@ -98,29 +99,11 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }
 
   const fetchPrice = async () => {
-    console.log('fetchPrice called:', { 
-      selectedRow: swapState.selectedRow?.chain, 
-      sellAmount: swapState.sellAmount, 
-      address, 
-      isConnected,
-      addressType: typeof address,
-      addressLength: address?.length 
-    });
-    
     if (!swapState.selectedRow || !swapState.sellAmount) {
-      console.log('fetchPrice validation failed - missing required data:', { 
-        hasSelectedRow: !!swapState.selectedRow,
-        hasSellAmount: !!swapState.sellAmount
-      });
       return
     }
     
     if (!address || !isConnected) {
-      console.log('fetchPrice validation failed - wallet not connected:', { 
-        hasAddress: !!address,
-        isConnected,
-        reason: !address ? 'no address' : !isConnected ? 'not connected' : 'unknown'
-      });
       return
     }
 
@@ -138,12 +121,10 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         chainId: chainId.toString(),
         sellToken: ETH_SENTINEL,
         buyToken: tokenAddress,
-        sellAmount: (parseFloat(swapState.sellAmount) * 1e18).toString(),
+        sellAmount: toBaseUnits(swapState.sellAmount, 18),
         taker: address,
         recipient: address,
       })
-
-      // Debug logging removed for performance
 
       const response = await fetch(`/api/0x/price?${params}`)
       const data = await response.json()
@@ -216,41 +197,7 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }
 
   const executeSwap = async () => {
-    console.log('=== EXECUTE SWAP DEBUG ===');
-    console.log('executeSwap called:', { 
-      selectedRow: !!swapState.selectedRow, 
-      sellAmount: swapState.sellAmount, 
-      address, 
-      isConnected, 
-      addressType: typeof address,
-      addressLength: address?.length,
-      addressValue: address,
-      walletContextAddress: address,
-      windowEthereum: typeof window !== 'undefined' ? !!window.ethereum : 'no window',
-      currentAccounts: typeof window !== 'undefined' && window.ethereum ? 'checking...' : 'no window'
-    });
-
-    // Double-check wallet connection right before swap
-    if (typeof window !== 'undefined' && window.ethereum) {
-      try {
-        const currentAccounts = await window.ethereum.request({ method: 'eth_accounts' });
-        console.log('Current accounts from MetaMask:', { currentAccounts, length: currentAccounts?.length });
-        
-        if (currentAccounts && currentAccounts.length > 0 && currentAccounts[0] !== address) {
-          console.log('WARNING: Address mismatch! Context says:', address, 'MetaMask says:', currentAccounts[0]);
-          // Update the context with the actual current address
-          // This is a workaround for timing issues
-        }
-      } catch (error) {
-        console.error('Error checking current accounts:', error);
-      }
-    }
-    
     if (!swapState.selectedRow || !swapState.sellAmount) {
-      console.log('executeSwap validation failed - missing required data:', { 
-        hasSelectedRow: !!swapState.selectedRow,
-        hasSellAmount: !!swapState.sellAmount
-      });
       setSwapState(prev => ({
         ...prev,
         error: 'Missing required swap data',
@@ -266,7 +213,6 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const accounts = await window.ethereum.request({ method: 'eth_accounts' });
         if (accounts && accounts.length > 0) {
           actualAddress = accounts[0];
-          console.log('Got address directly from MetaMask:', actualAddress);
         }
       } catch (error) {
         console.error('Error getting address from MetaMask:', error);
@@ -274,13 +220,6 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     if (!actualAddress || !isConnected) {
-      console.log('executeSwap validation failed - wallet not connected:', { 
-        hasAddress: !!actualAddress,
-        isConnected,
-        contextAddress: address,
-        actualAddress: actualAddress,
-        reason: !actualAddress ? 'no address' : !isConnected ? 'not connected' : 'unknown'
-      });
       setSwapState(prev => ({
         ...prev,
         error: 'Please connect your wallet to continue',
@@ -299,7 +238,7 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error('Unsupported chain or token')
       }
 
-      const sellAmountInWei = (parseFloat(swapState.sellAmount) * 1e18).toString();
+      const sellAmountInWei = toBaseUnits(swapState.sellAmount, 18);
       
       const params = new URLSearchParams({
         chainId: chainId.toString(),
@@ -309,8 +248,6 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         taker: actualAddress,
         recipient: actualAddress,
       })
-
-      // Debug logging removed for performance
 
       const response = await fetch(`/api/0x/quote?${params}`)
       const data = await response.json()
@@ -327,8 +264,6 @@ export const SwapProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ...data.transaction,
         from: actualAddress
       };
-      
-      console.log('Transaction being sent to MetaMask:', transaction);
 
       const txHash = await window.ethereum!.request({
         method: 'eth_sendTransaction',

@@ -20,33 +20,14 @@ export async function GET(request: Request) {
   });
 
   try {
-    const sellToken = params.get("sellToken")?.toLowerCase();
-    const isNativeSell = sellToken === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" || sellToken === "eth";
-    const baseUrl = isNativeSell
-      ? "https://api.0x.org/swap/v1/price"
-      : "https://api.0x.org/swap/allowance-holder/price";
-
-    // Map taker->takerAddress for v1 to improve route quality/validation
-    if (isNativeSell) {
-      const taker = params.get("taker");
-      if (taker && !params.get("takerAddress")) {
-        params.set("takerAddress", taker);
-      }
-      // v1 expects 'ETH' for native token
-      params.set("sellToken", "ETH");
-      params.delete("taker");
-      params.delete("recipient");
-    }
-
-    const url = `${baseUrl}?${params.toString()}`
-    const response = await fetch(url,
-      {
-        headers: {
-          "0x-api-key": ZERO_X_API_KEY,
-          "0x-version": isNativeSell ? "v1" : "v2",
-        },
-      }
-    );
+    const baseUrl = "https://api.0x.org/swap/allowance-holder/price";
+    const url = `${baseUrl}?${params.toString()}`;
+    const response = await fetch(url, {
+      headers: {
+        "0x-api-key": ZERO_X_API_KEY,
+        "0x-version": "v2",
+      },
+    });
 
     if (!response.ok) {
       const errorText = await response.text();

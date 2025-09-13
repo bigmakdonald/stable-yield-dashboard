@@ -19,32 +19,13 @@ export async function GET(request: Request) {
     params.append(key, value);
   });
 
-  // Determine endpoint based on sell token. Native sells should use v1.
-  const sellToken = params.get("sellToken")?.toLowerCase();
-  const isNativeSell = sellToken === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" || sellToken === "eth";
-  const baseUrl = isNativeSell
-    ? "https://api.0x.org/swap/v1/quote"
-    : "https://api.0x.org/swap/allowance-holder/quote";
-
-  // For v1, use takerAddress param if provided as taker
-  if (isNativeSell) {
-    const taker = params.get("taker");
-    if (taker && !params.get("takerAddress")) {
-      params.set("takerAddress", taker);
-    }
-    // v1 expects 'ETH' instead of the 0xeeee... sentinel
-    params.set("sellToken", "ETH");
-    // Remove params not supported by v1
-    params.delete("taker");
-    params.delete("recipient");
-  }
-
   try {
-    const url = `${baseUrl}?${params.toString()}`
+    const baseUrl = "https://api.0x.org/swap/allowance-holder/quote";
+    const url = `${baseUrl}?${params.toString()}`;
     const response = await fetch(url, {
       headers: {
         "0x-api-key": ZERO_X_API_KEY,
-        "0x-version": isNativeSell ? "v1" : "v2",
+        "0x-version": "v2",
       },
     });
 
