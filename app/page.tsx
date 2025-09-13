@@ -15,6 +15,7 @@ import dynamic from "next/dynamic"
 import { WalletConnection } from "@/components/WalletConnection"
 import { SwapDrawer } from "@/components/SwapDrawer"
 import { useSwap } from "@/contexts/SwapContext"
+import { AutopilotModal } from "@/components/AutopilotModal"
 
 const MiniSpark = dynamic(() => import("@/components/MiniSpark"), { 
   ssr: false,
@@ -36,6 +37,7 @@ export default function StablecoinYieldDashboard() {
   const [lastUpdated, setLastUpdated] = useState<string>("")
   const [isUpdating, setIsUpdating] = useState(false)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
+  const [autopilotOpen, setAutopilotOpen] = useState(false)
 
   // Load data with auto-refresh
   useEffect(() => {
@@ -144,6 +146,7 @@ export default function StablecoinYieldDashboard() {
             </div>
             <div className="flex items-center gap-4">
               <div className="text-sm text-muted-foreground">Data last updated: {lastUpdated}</div>
+              <Button variant="secondary" onClick={() => setAutopilotOpen(true)}>Autopilot</Button>
               <WalletConnection />
             </div>
           </div>
@@ -472,6 +475,7 @@ export default function StablecoinYieldDashboard() {
           </CardContent>
         </Card>
         <SwapDrawer />
+        <AutopilotModal open={autopilotOpen} onOpenChange={setAutopilotOpen} />
       </main>
     </div>
   )
