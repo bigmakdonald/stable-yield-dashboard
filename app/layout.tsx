@@ -4,6 +4,7 @@ import { GeistMono } from 'geist/font/mono'
 import { Analytics } from '@vercel/analytics/next'
 import { WalletProvider } from '@/contexts/WalletContext'
 import { SwapProvider } from '@/contexts/SwapContext'
+import { Providers } from './providers'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -20,11 +21,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <WalletProvider>
-          <SwapProvider>
-            {children}
-          </SwapProvider>
-        </WalletProvider>
+        <Providers>
+          <WalletProvider>
+            <SwapProvider>
+              {children}
+            </SwapProvider>
+          </WalletProvider>
+        </Providers>
         <Analytics />
       </body>
     </html>
