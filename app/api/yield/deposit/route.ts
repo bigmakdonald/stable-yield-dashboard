@@ -76,11 +76,20 @@ export async function POST(req: Request) {
       poolId, // pool ID
       userAddress, // user's wallet address
       slippageBps = 50, // slippage in basis points
+      chainId, // optional chain ID from frontend
     } = body;
 
     if (!asset || !token || !amount || !userAddress) {
       return NextResponse.json(
         { error: "Missing required fields: asset, token, amount, userAddress" },
+        { status: 400 }
+      );
+    }
+
+    // Validate we're only processing Ethereum Mainnet (chain ID 1)
+    if (chainId && chainId !== ETHEREUM_CHAIN_ID) {
+      return NextResponse.json(
+        { error: `Only Ethereum Mainnet (chain ID ${ETHEREUM_CHAIN_ID}) is supported. Received chain ID: ${chainId}` },
         { status: 400 }
       );
     }
@@ -93,11 +102,21 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get token address
+    // Get token address - ensure it's Ethereum Mainnet
     const tokenAddress = getTokenAddress(ETHEREUM_CHAIN_ID, token);
     if (!tokenAddress) {
       return NextResponse.json(
-        { error: `Token ${token} not supported on Ethereum` },
+        { error: `Token ${token} not supported on Ethereum Mainnet` },
+        { status: 400 }
+      );
+    }
+    
+    // Verify token address is an Ethereum Mainnet address
+    const ethereumTokenAddresses = AAVE_V3_ADDRESSES.ethereum.tokens;
+    const isValidEthereumToken = Object.values(ethereumTokenAddresses).includes(tokenAddress as any);
+    if (!isValidEthereumToken) {
+      return NextResponse.json(
+        { error: `Token address ${tokenAddress} is not a valid Ethereum Mainnet address` },
         { status: 400 }
       );
     }

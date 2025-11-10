@@ -1,10 +1,34 @@
 import { NextResponse } from "next/server";
-import { AAVE_V3_ADDRESSES, POOL_ADDRESSES_PROVIDER_ABI, POOL_ABI, ERC20_ABI, ETHEREUM_CHAIN_ID } from "@/lib/contracts/aave-v3";
-import { getTokenAddress, ETH_SENTINEL } from "@/lib/swap-config";
-import { toBaseUnits } from "@/lib/utils";
-import { encodeFunctionData, parseUnits } from "viem";
+import { ETHEREUM_CHAIN_ID } from "@/lib/contracts/aave-v3";
 
 export const dynamic = "force-dynamic";
+
+// Helper function to check if pool is on Ethereum Mainnet
+function isEthereumMainnet(pool: any): boolean {
+  const chain = String(pool.chain || "").toLowerCase().trim();
+  const chainId = pool.chainId ? Number(pool.chainId) : null;
+  
+  // Explicitly exclude other chains
+  const excludedChains = [
+    "arbitrum", "arbitrum-one", "arbitrum one",
+    "polygon", "polygon-pos", "polygon pos",
+    "base", "base-mainnet",
+    "optimism", "optimistic-ethereum",
+    "avalanche", "avax", "avalanche c-chain",
+    "fantom", "ftm",
+    "harmony", "harmony-one"
+  ];
+  
+  if (excludedChains.includes(chain)) {
+    return false;
+  }
+  
+  // Check for Ethereum Mainnet - must match chain name AND chain ID if available
+  const isEthereumChain = chain === "ethereum" || chain === "eth" || chain === "mainnet";
+  const isChainId1 = chainId === null || chainId === 1;
+  
+  return isEthereumChain && isChainId1;
+}
 
 // Fetch Aave V3 yields from DeFiLlama API
 async function fetchAaveV3Yields(): Promise<any[]> {
@@ -14,11 +38,12 @@ async function fetchAaveV3Yields(): Promise<any[]> {
     const raw = await r.json();
     const data = Array.isArray(raw) ? raw : raw?.data ?? [];
     
-    // Filter for Aave V3 on Ethereum
+    // Filter for Aave V3 on Ethereum Mainnet only
     return data.filter((p: any) => {
-      const chain = String(p.chain || "").toLowerCase();
+      if (!isEthereumMainnet(p)) return false;
+      
       const protocol = String(p.project || "").toLowerCase();
-      return chain === "ethereum" && protocol.includes("aave") && protocol.includes("v3");
+      return protocol.includes("aave") && protocol.includes("v3");
     });
   } catch (e) {
     console.error("Failed to fetch Aave V3 yields:", e);
@@ -34,11 +59,12 @@ async function fetchFallbackYields(): Promise<any[]> {
     const raw = await r.json();
     const data = Array.isArray(raw) ? raw : raw?.data ?? [];
     
-    // Filter for Ethereum stablecoins
+    // Filter for Ethereum Mainnet stablecoins only
     return data.filter((p: any) => {
-      const chain = String(p.chain || "").toLowerCase();
+      if (!isEthereumMainnet(p)) return false;
+      
       const symbol = String(p.symbol || "").toUpperCase();
-      return chain === "ethereum" && ["USDC", "USDT", "DAI"].includes(symbol);
+      return ["USDC", "USDT", "DAI"].includes(symbol);
     });
   } catch (e) {
     console.error("Failed to fetch fallback yields:", e);
@@ -57,15 +83,21 @@ export async function GET(request: Request) {
     // If no Aave V3 yields, use fallback
     let yields = aaveYields.length > 0 ? aaveYields : await fetchFallbackYields();
     
+    // Double-check all yields are Ethereum Mainnet before mapping
+    const ethereumYields = yields.filter((p: any) => isEthereumMainnet(p));
+    
     // If still no yields, return empty array (don't show options)
-    if (yields.length === 0) {
+    if (ethereumYields.length === 0) {
       return NextResponse.json({ options: [], prioritized: false });
     }
 
-    const options = yields
+    const options = ethereumYields
       .map((p: any) => {
         const symbol = String(p.symbol || "").toUpperCase();
         if (!["USDC", "USDT", "DAI"].includes(symbol)) return null;
+        
+        // Final validation: ensure chain is Ethereum Mainnet
+        if (!isEthereumMainnet(p)) return null;
         
         const apyBase = Number(p.apyBase ?? 0) || 0;
         const apyReward = Number(p.apyReward ?? 0) || 0;
@@ -84,6 +116,7 @@ export async function GET(request: Request) {
           poolId: p.pool || "",
           source: aaveYields.length > 0 && p.project?.toLowerCase().includes("aave") ? "aave-v3" : "defillama",
           poolAddress: p.url?.match(/0x[a-fA-F0-9]{40}/)?.[0]?.toLowerCase() || null,
+          chainId: ETHEREUM_CHAIN_ID, // Explicitly set Ethereum Mainnet chain ID
         };
       })
       .filter(Boolean)
