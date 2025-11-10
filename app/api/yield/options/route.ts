@@ -59,12 +59,12 @@ async function fetchFallbackYields(): Promise<any[]> {
     const raw = await r.json();
     const data = Array.isArray(raw) ? raw : raw?.data ?? [];
     
-    // Filter for Ethereum Mainnet stablecoins only
+    // Filter for Ethereum Mainnet USDC pools only
     return data.filter((p: any) => {
       if (!isEthereumMainnet(p)) return false;
       
       const symbol = String(p.symbol || "").toUpperCase();
-      return ["USDC", "USDT", "DAI"].includes(symbol);
+      return symbol === "USDC";
     });
   } catch (e) {
     console.error("Failed to fetch fallback yields:", e);
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
     const options = ethereumYields
       .map((p: any) => {
         const symbol = String(p.symbol || "").toUpperCase();
-        if (!["USDC", "USDT", "DAI"].includes(symbol)) return null;
+        if (symbol !== "USDC") return null;
         
         // Final validation: ensure chain is Ethereum Mainnet
         if (!isEthereumMainnet(p)) return null;

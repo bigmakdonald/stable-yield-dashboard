@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { AAVE_V3_ADDRESSES, POOL_ABI, ERC20_ABI, ETHEREUM_CHAIN_ID } from "@/lib/contracts/aave-v3";
-import { getTokenAddress, ETH_SENTINEL } from "@/lib/swap-config";
+import { getTokenAddress } from "@/lib/swap-config";
 import { toBaseUnits } from "@/lib/utils";
-import { encodeFunctionData, parseUnits, createPublicClient, http } from "viem";
+import { encodeFunctionData, parseUnits, createPublicClient, http, formatUnits } from "viem";
 import { mainnet } from "viem/chains";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +15,11 @@ const publicClient = createPublicClient({
 
 // Aave V3 Pool address on Ethereum Mainnet (hardcoded constant)
 const POOL_ADDRESS = AAVE_V3_ADDRESSES.ethereum.Pool;
+const WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const;
+const UNISWAP_V3_ROUTER = '0xE592427A0AEce92De3Edee1F18E0157C05861564' as const;
+const UNISWAP_V3_QUOTER = '0x61fFE014bA17989E743c5F6cB21bF9697530B21e' as const;
+const UNISWAP_FEE_TIER = 500; // 0.05% pool for WETH/USDC
+const DEFAULT_DEADLINE_SECONDS = 60 * 30; // 30 minutes
 
 // Get token decimals
 async function getTokenDecimals(tokenAddress: string): Promise<number> {
@@ -31,39 +36,59 @@ async function getTokenDecimals(tokenAddress: string): Promise<number> {
   }
 }
 
-// Get swap quote from internal 0x API
-async function getSwapQuote(
-  sellToken: string,
-  buyToken: string,
-  sellAmount: string,
-  slippageBps: number,
-  taker: string,
-  requestUrl: string
-): Promise<any> {
-  const params = new URLSearchParams({
-    chainId: String(ETHEREUM_CHAIN_ID),
-    sellToken,
-    buyToken,
-    sellAmount,
-    slippageBps: String(slippageBps),
-    taker,
-    recipient: taker,
-  });
+const UNISWAP_QUOTER_ABI = [
+  {
+    inputs: [
+      {
+        components: [
+          { internalType: 'address', name: 'tokenIn', type: 'address' },
+          { internalType: 'address', name: 'tokenOut', type: 'address' },
+          { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
+          { internalType: 'uint256', name: 'sqrtPriceLimitX96', type: 'uint256' },
+          { internalType: 'uint24', name: 'fee', type: 'uint24' },
+        ],
+        internalType: 'struct IQuoterV2.QuoteExactInputSingleParams',
+        name: 'params',
+        type: 'tuple',
+      },
+    ],
+    name: 'quoteExactInputSingle',
+    outputs: [
+      { internalType: 'uint256', name: 'amountOut', type: 'uint256' },
+      { internalType: 'uint160', name: 'sqrtPriceX96After', type: 'uint160' },
+      { internalType: 'uint32', name: 'initializedTicksCrossed', type: 'uint32' },
+      { internalType: 'uint256', name: 'gasEstimate', type: 'uint256' },
+    ],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const;
 
-  // Use the request URL origin to call internal API
-  const url = new URL(requestUrl);
-  const baseUrl = `${url.protocol}//${url.host}`;
-  const apiUrl = `${baseUrl}/api/0x/quote?${params.toString()}`;
-  
-  const response = await fetch(apiUrl);
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-    throw new Error(`Swap quote error: ${errorData.error || "Failed to get quote"}`);
-  }
-
-  return response.json();
-}
+const UNISWAP_ROUTER_ABI = [
+  {
+    inputs: [
+      {
+        components: [
+          { internalType: 'address', name: 'tokenIn', type: 'address' },
+          { internalType: 'address', name: 'tokenOut', type: 'address' },
+          { internalType: 'uint24', name: 'fee', type: 'uint24' },
+          { internalType: 'address', name: 'recipient', type: 'address' },
+          { internalType: 'uint256', name: 'deadline', type: 'uint256' },
+          { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
+          { internalType: 'uint256', name: 'amountOutMinimum', type: 'uint256' },
+          { internalType: 'uint160', name: 'sqrtPriceLimitX96', type: 'uint160' },
+        ],
+        internalType: 'struct ISwapRouter.ExactInputSingleParams',
+        name: 'params',
+        type: 'tuple',
+      },
+    ],
+    name: 'exactInputSingle',
+    outputs: [{ internalType: 'uint256', name: 'amountOut', type: 'uint256' }],
+    stateMutability: 'payable',
+    type: 'function',
+  },
+] as const;
 
 export async function POST(req: Request) {
   try {
@@ -129,36 +154,100 @@ export async function POST(req: Request) {
     
     // Get token decimals
     const decimals = await getTokenDecimals(tokenAddress);
-    const amountWei = parseUnits(amount, decimals);
 
     const steps: any[] = [];
+    let depositAmountWei: bigint;
 
-    // If asset is ETH, we need to swap first
+    // If asset is ETH, we need to swap first (only USDC target is currently supported)
     if (asset.toUpperCase() === "ETH") {
-      const sellAmountWei = toBaseUnits(amount, 18); // ETH has 18 decimals
-      
-      try {
-        const swapQuote = await getSwapQuote(
-          ETH_SENTINEL,
-          tokenAddress,
-          sellAmountWei,
-          slippageBps,
-          userAddress,
-          req.url
+      if (token.toUpperCase() !== "USDC") {
+        return NextResponse.json(
+          { error: "ETH entry is only supported for USDC pools at the moment." },
+          { status: 400 }
         );
+      }
+
+      const amountInWei = toBaseUnits(amount, 18); // ETH has 18 decimals
+
+      if (amountInWei <= 0n) {
+        return NextResponse.json(
+          { error: "Swap amount must be greater than zero." },
+          { status: 400 }
+        );
+      }
+
+      try {
+        const quoteResult = await publicClient.readContract({
+          address: UNISWAP_V3_QUOTER,
+          abi: UNISWAP_QUOTER_ABI,
+          functionName: 'quoteExactInputSingle',
+          args: [{
+            tokenIn: WETH_ADDRESS,
+            tokenOut: tokenAddress as `0x${string}`,
+            amountIn: amountInWei,
+            sqrtPriceLimitX96: 0n,
+            fee: UNISWAP_FEE_TIER,
+          }],
+        }) as readonly [bigint, bigint, number, bigint];
+
+        const expectedAmountOut = quoteResult[0];
+
+        if (expectedAmountOut <= 0n) {
+          return NextResponse.json(
+            { error: "Unable to fetch a valid quote for ETH to USDC swap." },
+            { status: 400 }
+          );
+        }
+
+        const slippage = BigInt(slippageBps);
+        let minimumAmountOut = expectedAmountOut - (expectedAmountOut * slippage) / 10_000n;
+        if (minimumAmountOut < 0n) {
+          minimumAmountOut = 0n;
+        }
+
+        const deadline = BigInt(Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_SECONDS);
+
+        const swapData = encodeFunctionData({
+          abi: UNISWAP_ROUTER_ABI,
+          functionName: 'exactInputSingle',
+          args: [{
+            tokenIn: WETH_ADDRESS,
+            tokenOut: tokenAddress as `0x${string}`,
+            fee: UNISWAP_FEE_TIER,
+            recipient: userAddress as `0x${string}`,
+            deadline,
+            amountIn: amountInWei,
+            amountOutMinimum: minimumAmountOut,
+            sqrtPriceLimitX96: 0n,
+          }],
+        });
 
         steps.push({
           type: "swap",
-          to: swapQuote.transaction?.to || swapQuote.to,
-          data: swapQuote.transaction?.data || swapQuote.data,
-          value: swapQuote.value || `0x${BigInt(sellAmountWei).toString(16)}`,
+          protocol: "uniswap-v3",
+          to: UNISWAP_V3_ROUTER,
+          data: swapData,
+          value: `0x${amountInWei.toString(16)}`,
           description: `Swap ${amount} ETH to ${token}`,
-          estimatedBuyAmount: swapQuote.buyAmount || swapQuote.buyTokenAmount,
+          estimatedBuyAmount: expectedAmountOut.toString(),
+          minimumBuyAmount: minimumAmountOut.toString(),
+          chainId: ETHEREUM_CHAIN_ID,
         });
+
+        depositAmountWei = minimumAmountOut;
       } catch (e: any) {
+        console.error("Uniswap quote error:", e);
         return NextResponse.json(
-          { error: `Failed to get swap quote: ${e.message}` },
+          { error: `Failed to prepare swap transaction: ${e.message || e}` },
           { status: 500 }
+        );
+      }
+    } else {
+      depositAmountWei = parseUnits(amount, decimals);
+      if (depositAmountWei <= 0n) {
+        return NextResponse.json(
+          { error: "Deposit amount must be greater than zero." },
+          { status: 400 }
         );
       }
     }
@@ -177,6 +266,7 @@ export async function POST(req: Request) {
       data: approveData,
       value: "0x0",
       description: `Approve ${token} spending`,
+      chainId: ETHEREUM_CHAIN_ID,
     });
 
     // Deposit step
@@ -185,18 +275,22 @@ export async function POST(req: Request) {
       functionName: 'supply',
       args: [
         tokenAddress as `0x${string}`,
-        amountWei,
+        depositAmountWei,
         userAddress as `0x${string}`,
         0, // referralCode
       ],
     });
+
+    const depositAmountFormatted = Number(formatUnits(depositAmountWei, decimals))
+      .toLocaleString(undefined, { maximumFractionDigits: 6 });
 
     steps.push({
       type: "deposit",
       to: poolAddress,
       data: depositData,
       value: "0x0",
-      description: `Deposit ${amount} ${token} to ${protocol}`,
+      description: `Deposit ${depositAmountFormatted} ${token} to ${protocol}`,
+      chainId: ETHEREUM_CHAIN_ID,
     });
 
     return NextResponse.json({
@@ -205,6 +299,7 @@ export async function POST(req: Request) {
       protocol,
       token,
       amount,
+      depositAmountWei: depositAmountWei.toString(),
     });
   } catch (e: any) {
     console.error("Deposit API error:", e);

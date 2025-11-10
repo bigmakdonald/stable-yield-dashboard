@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,6 +30,8 @@ type DepositStep = {
   value: string
   description: string
   estimatedBuyAmount?: string
+  minimumBuyAmount?: string
+  chainId?: number
 }
 
 export function AutopilotModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -46,6 +48,68 @@ export function AutopilotModal({ open, onOpenChange }: { open: boolean; onOpenCh
   const [error, setError] = useState<string | null>(null)
   const [transactionHashes, setTransactionHashes] = useState<string[]>([])
   const [isDepositing, setIsDepositing] = useState(false)
+  const [chainId, setChainId] = useState<number | null>(null)
+
+  const ETHEREUM_CHAIN_ID = 1
+  const ETHEREUM_CHAIN_ID_HEX = "0x1"
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.ethereum) return
+
+    const updateChainId = (chainHex: string) => {
+      try {
+        const parsed = parseInt(chainHex, 16)
+        setChainId(Number.isNaN(parsed) ? null : parsed)
+      } catch {
+        setChainId(null)
+      }
+    }
+
+    const fetchChainId = async () => {
+      try {
+        const currentChain = await window.ethereum!.request({ method: "eth_chainId" })
+        updateChainId(currentChain)
+      } catch {
+        setChainId(null)
+      }
+    }
+
+    fetchChainId()
+    const handler = (newChainId: string) => updateChainId(newChainId)
+    window.ethereum.on("chainChanged", handler)
+    return () => {
+      window.ethereum?.removeListener("chainChanged", handler)
+    }
+  }, [])
+
+  const ensureEthereumChain = async () => {
+    if (typeof window === "undefined" || !window.ethereum) {
+      setError("Ethereum provider not available. Please install MetaMask or another compatible wallet.")
+      return false
+    }
+
+    try {
+      const currentChain = await window.ethereum.request({ method: "eth_chainId" })
+      if (currentChain !== ETHEREUM_CHAIN_ID_HEX) {
+        try {
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: ETHEREUM_CHAIN_ID_HEX }],
+          })
+          setChainId(ETHEREUM_CHAIN_ID)
+        } catch (switchError: any) {
+          setError("Please switch to Ethereum Mainnet to continue with the yield farming flow.")
+          return false
+        }
+      } else {
+        setChainId(ETHEREUM_CHAIN_ID)
+      }
+      return true
+    } catch (err: any) {
+      setError(err?.message || "Failed to determine current network. Please try again.")
+      return false
+    }
+  }
 
   const loadYieldOptions = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -85,8 +149,14 @@ export function AutopilotModal({ open, onOpenChange }: { open: boolean; onOpenCh
       return
     }
 
-    setLoading(true)
     setError(null)
+
+    const onEthereum = await ensureEthereumChain()
+    if (!onEthereum) {
+      return
+    }
+
+    setLoading(true)
     setDepositSteps([])
     setCurrentStepIndex(0)
     setTransactionHashes([])
@@ -103,6 +173,7 @@ export function AutopilotModal({ open, onOpenChange }: { open: boolean; onOpenCh
           poolId: selectedOption.poolId,
           userAddress: address,
           slippageBps: 50,
+          chainId: ETHEREUM_CHAIN_ID,
         }),
       })
 
@@ -130,6 +201,11 @@ export function AutopilotModal({ open, onOpenChange }: { open: boolean; onOpenCh
       return
     }
 
+    const onEthereum = await ensureEthereumChain()
+    if (!onEthereum) {
+      return
+    }
+
     setIsDepositing(true)
     setError(null)
     setCurrentStepIndex(0)
@@ -145,6 +221,7 @@ export function AutopilotModal({ open, onOpenChange }: { open: boolean; onOpenCh
           to: step.to,
           data: step.data,
           value: step.value || "0x0",
+          chainId: ETHEREUM_CHAIN_ID_HEX,
         }
 
         // Send transaction
@@ -245,6 +322,14 @@ export function AutopilotModal({ open, onOpenChange }: { open: boolean; onOpenCh
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {chainId !== null && chainId !== ETHEREUM_CHAIN_ID && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                ⚠️ You are connected to chain ID {chainId}. Please switch to Ethereum Mainnet before continuing.
+              </AlertDescription>
             </Alert>
           )}
 
