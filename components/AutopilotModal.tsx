@@ -1,215 +1,399 @@
 "use client"
 
-import React, { useMemo, useState } from "react"
+import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
 import { useWallet } from "@/contexts/WalletContext"
-import { ETH_SENTINEL, CHAIN_MAPPING, getTokenAddress } from "@/lib/swap-config"
-import { toBaseUnits } from "@/lib/utils"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
+
+type YieldOption = {
+  protocol: string
+  token: "USDC" | "USDT" | "DAI"
+  apy: number
+  apyBase: number
+  apyReward: number
+  tvlUsd: number
+  poolId: string
+  source: "aave-v3" | "defillama"
+  poolAddress?: string | null
+}
+
+type DepositStep = {
+  type: "swap" | "approve" | "deposit"
+  to: string
+  data: string
+  value: string
+  description: string
+  estimatedBuyAmount?: string
+}
 
 export function AutopilotModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { isConnected, address } = useWallet()
 
-  const [risk, setRisk] = useState("Conservative")
-  const [chainId, setChainId] = useState(1)
-  const [stable, setStable] = useState("USDC")
-  const [amountEth, setAmountEth] = useState("1")
-  const [minTvl, setMinTvl] = useState("10000000")
-  const [slippageBps, setSlippageBps] = useState("50")
-
-  const [rankResult, setRankResult] = useState<any>(null)
-  const [plan, setPlan] = useState<any>(null)
-  const [summary, setSummary] = useState<string>("")
+  const [asset, setAsset] = useState<"USDC" | "ETH">("USDC")
+  const [amount, setAmount] = useState("")
+  const [yieldOptions, setYieldOptions] = useState<YieldOption[]>([])
+  const [selectedOption, setSelectedOption] = useState<YieldOption | null>(null)
+  const [depositSteps, setDepositSteps] = useState<DepositStep[]>([])
+  const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [loadingOptions, setLoadingOptions] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [transactionHashes, setTransactionHashes] = useState<string[]>([])
+  const [isDepositing, setIsDepositing] = useState(false)
 
-  const top = useMemo(() => rankResult?.candidates?.[0] ?? null, [rankResult])
-
-  const runRank = async () => {
-    setLoading(true); setError(null); setSummary("")
-    try {
-      const url = new URL("/api/strategy/rank", window.location.origin)
-      url.searchParams.set("risk", risk)
-      url.searchParams.set("chains", String(chainId))
-      url.searchParams.set("stables", stable)
-      url.searchParams.set("minTvlUsd", minTvl || "0")
-      url.searchParams.set("slippageBps", slippageBps)
-      url.searchParams.set("maxCandidates", "5")
-      const r = await fetch(url.toString())
-      const j = await r.json()
-      if (!r.ok) throw new Error(j?.error || "Failed to rank")
-      setRankResult(j)
-
-      // Build a human summary including an estimated trade using /api/0x/price
-      const candidate = j?.candidates?.[0]
-      if (candidate) {
-        const buyAddr = getTokenAddress(candidate.chainId, candidate.token)
-        if (buyAddr) {
-          const sellAmountWei = toBaseUnits(amountEth || "1", 18)
-          const params = new URLSearchParams({
-            chainId: String(candidate.chainId),
-            sellToken: ETH_SENTINEL,
-            buyToken: buyAddr,
-            sellAmount: sellAmountWei,
-            slippageBps: slippageBps || "50",
-          })
-          if (address) { params.set("taker", address); params.set("recipient", address) }
-          const price = await fetch(`/api/0x/price?${params}`).then(r=>r.json()).catch(()=>null)
-          const exp = price ? Number(price.buyAmount || 0) / 1e6 : undefined
-          const min = price ? Number(price.minBuyAmount || 0) / 1e6 : undefined
-          const readable = `Based on ${risk} risk and your filters, we recommend ${candidate.protocol} on Ethereum with ~${(candidate.apy||0).toFixed(2)}% APY. Suggested entry: swap ${amountEth} ETH → ${exp ? exp.toFixed(2) : "~"} ${candidate.token} (min ${min ? min.toFixed(2) : "~"} at ${slippageBps} bps slippage), then deposit.`
-          setSummary(readable)
-        }
-      }
-    } catch (e: any) {
-      setError(e?.message || "Failed")
-    } finally { setLoading(false) }
-  }
-
-  const buildPlan = async () => {
-    if (!top) return
-    setLoading(true); setError(null)
-    try {
-      const url = new URL("/api/strategy/plan", window.location.origin)
-      url.searchParams.set("chainId", String(top.chainId))
-      url.searchParams.set("protocol", top.protocol)
-      url.searchParams.set("token", top.token)
-      url.searchParams.set("poolId", top.poolId)
-      url.searchParams.set("amount", amountEth)
-      url.searchParams.set("startAsset", "ETH")
-      url.searchParams.set("apy", String(top.apy))
-      url.searchParams.set("tvlUsd", String(top.tvlUsd))
-      url.searchParams.set("slippageBps", slippageBps)
-      const r = await fetch(url.toString())
-      const j = await r.json()
-      if (!r.ok) throw new Error(j?.error || "Failed to plan")
-      setPlan(j)
-    } catch (e: any) {
-      setError(e?.message || "Failed")
-    } finally { setLoading(false) }
-  }
-
-  const executeFirstSwap = async () => {
-    if (!plan?.steps?.length || !isConnected || !address) {
-      setError(!isConnected ? "Connect wallet first" : "No plan available")
+  const loadYieldOptions = async () => {
+    if (!amount || parseFloat(amount) <= 0) {
+      setError("Please enter a valid amount")
       return
     }
-    const step = plan.steps[0]
-    if (step.type !== "swap") { setError("First step is not a swap"); return }
+
+    setLoadingOptions(true)
+    setError(null)
+    setYieldOptions([])
+    setSelectedOption(null)
 
     try {
-      setLoading(true); setError(null)
-      const params = new URLSearchParams({
-        chainId: String(step.chainId),
-        sellToken: step.sellToken,
-        buyToken: step.buyToken,
-        sellAmount: step.sellAmountWei,
-        slippageBps: String(step.slippageBps || slippageBps || "50"),
-        taker: address!,
-        recipient: address!,
-      })
-      const quote = await fetch(`/api/0x/quote?${params}`).then(r=>r.json())
-      if (quote?.error) throw new Error(quote.error)
+      const r = await fetch(`/api/yield/options?asset=${asset}`)
+      const data = await r.json()
+      
+      if (!r.ok) {
+        throw new Error(data.error || "Failed to load yield options")
+      }
 
-      const tx = {
-        from: address!,
-        to: quote.transaction.to,
-        data: quote.transaction.data,
-        value: '0x' + BigInt(step.sellAmountWei).toString(16),
-      } as any
-      await (window as any).ethereum.request({ method: 'eth_sendTransaction', params: [tx] })
+      if (!data.options || data.options.length === 0) {
+        setError("No yield options available. Please try again later.")
+        return
+      }
+
+      setYieldOptions(data.options)
     } catch (e: any) {
-      setError(e?.message || 'Swap failed')
-    } finally { setLoading(false) }
+      setError(e?.message || "Failed to load yield options")
+    } finally {
+      setLoadingOptions(false)
+    }
+  }
+
+  const prepareDeposit = async () => {
+    if (!selectedOption || !isConnected || !address) {
+      setError(!isConnected ? "Please connect your wallet first" : "Please select a yield option")
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setDepositSteps([])
+    setCurrentStepIndex(0)
+    setTransactionHashes([])
+
+    try {
+      const r = await fetch("/api/yield/deposit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asset,
+          token: selectedOption.token,
+          amount,
+          protocol: selectedOption.protocol,
+          poolId: selectedOption.poolId,
+          userAddress: address,
+          slippageBps: 50,
+        }),
+      })
+
+      const data = await r.json()
+      
+      if (!r.ok) {
+        throw new Error(data.error || "Failed to prepare deposit")
+      }
+
+      if (!data.steps || data.steps.length === 0) {
+        throw new Error("No deposit steps generated")
+      }
+
+      setDepositSteps(data.steps)
+    } catch (e: any) {
+      setError(e?.message || "Failed to prepare deposit")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const executeDeposit = async () => {
+    if (!depositSteps.length || !isConnected || !address) {
+      setError("Deposit not prepared or wallet not connected")
+      return
+    }
+
+    setIsDepositing(true)
+    setError(null)
+    setCurrentStepIndex(0)
+    const hashes: string[] = []
+
+    try {
+      for (let i = 0; i < depositSteps.length; i++) {
+        setCurrentStepIndex(i)
+        const step = depositSteps[i]
+
+        const tx = {
+          from: address,
+          to: step.to,
+          data: step.data,
+          value: step.value || "0x0",
+        }
+
+        // Send transaction
+        const txHash = await (window as any).ethereum.request({
+          method: "eth_sendTransaction",
+          params: [tx],
+        })
+
+        hashes.push(txHash)
+        setTransactionHashes([...hashes])
+
+        // Wait for transaction confirmation (optional - can be improved with polling)
+        // For now, we'll just wait a bit before next step
+        if (i < depositSteps.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+        }
+      }
+
+      // Success - reset form
+      setTimeout(() => {
+        setAmount("")
+        setSelectedOption(null)
+        setDepositSteps([])
+        setCurrentStepIndex(0)
+        setTransactionHashes([])
+        setIsDepositing(false)
+      }, 3000)
+    } catch (e: any) {
+      setError(e?.message || "Transaction failed")
+      setIsDepositing(false)
+    }
+  }
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(value)
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Autopilot Strategy Builder</DialogTitle>
+          <DialogTitle>Yield Farming - Ethereum Mainnet</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Asset Selection */}
           <Card>
-            <CardContent className="pt-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm">Risk</label>
-                  <Select value={risk} onValueChange={setRisk}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Conservative">Conservative</SelectItem>
-                      <SelectItem value="Balanced">Balanced</SelectItem>
-                      <SelectItem value="Aggressive">Aggressive</SelectItem>
-                    </SelectContent>
-                  </Select>
+            <CardHeader>
+              <CardTitle className="text-lg">Select Asset</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup value={asset} onValueChange={(v) => {
+                setAsset(v as "USDC" | "ETH")
+                setYieldOptions([])
+                setSelectedOption(null)
+              }}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="USDC" id="usdc" />
+                  <Label htmlFor="usdc" className="cursor-pointer">USDC</Label>
                 </div>
-                <div>
-                  <label className="text-sm">Chain</label>
-                  <Select value={String(chainId)} onValueChange={(v)=>setChainId(Number(v))}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(CHAIN_MAPPING).map(([name,id])=> (
-                        <SelectItem key={name} value={String(id)}>{name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="ETH" id="eth" />
+                  <Label htmlFor="eth" className="cursor-pointer">ETH</Label>
                 </div>
-                <div>
-                  <label className="text-sm">Stable</label>
-                  <Select value={stable} onValueChange={setStable}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USDC">USDC</SelectItem>
-                      <SelectItem value="USDT">USDT</SelectItem>
-                      <SelectItem value="DAI">DAI</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm">Min TVL (USD)</label>
-                  <Input value={minTvl} onChange={e=>setMinTvl(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-sm">Amount (ETH)</label>
-                  <Input value={amountEth} onChange={e=>setAmountEth(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-sm">Slippage (bps)</label>
-                  <Input value={slippageBps} onChange={e=>setSlippageBps(e.target.value)} />
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <Button onClick={runRank} disabled={loading}>Find Strategy</Button>
-                <Button onClick={buildPlan} disabled={loading || !top}>Build Plan</Button>
-                <Button onClick={executeFirstSwap} disabled={loading || !plan || !isConnected}>Execute Swap</Button>
-              </div>
-              {error && <div className="text-red-600 text-sm">{error}</div>}
-              {summary && (
-                <div className="text-sm bg-muted/40 p-3 rounded">
-                  {summary}
-                </div>
-              )}
+              </RadioGroup>
             </CardContent>
           </Card>
-          {rankResult && (
+
+          {/* Amount Input */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Amount</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder={`Enter amount in ${asset}`}
+                step="0.01"
+                min="0"
+              />
+              <Button
+                onClick={loadYieldOptions}
+                disabled={loadingOptions || !amount || parseFloat(amount) <= 0}
+                className="w-full"
+              >
+                {loadingOptions ? "Loading Yield Options..." : "Load Yield Options"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Error Display */}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Yield Options */}
+          {yieldOptions.length > 0 && (
             <Card>
-              <CardHeader><CardTitle>Top Candidate</CardTitle></CardHeader>
-              <CardContent>
-                <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(rankResult.candidates?.[0], null, 2)}</pre>
+              <CardHeader>
+                <CardTitle className="text-lg">Available Yield Options</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {yieldOptions.map((option, index) => (
+                  <div
+                    key={index}
+                    onClick={() => setSelectedOption(option)}
+                    className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                      selectedOption?.poolId === option.poolId
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="font-semibold">{option.protocol}</span>
+                          <Badge variant="outline">{option.token}</Badge>
+                          {option.source === "aave-v3" && (
+                            <Badge variant="secondary" className="bg-green-100 text-green-800">
+                              Aave V3
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-2xl font-bold text-green-600">
+                            Expected Yield: {option.apy.toFixed(2)}% APY
+                          </div>
+                          {option.apyReward > 0 && (
+                            <div className="text-sm text-muted-foreground">
+                              Base: {option.apyBase.toFixed(2)}% + Rewards: {option.apyReward.toFixed(2)}%
+                            </div>
+                          )}
+                          <div className="text-sm text-muted-foreground">
+                            TVL: {formatCurrency(option.tvlUsd)}
+                          </div>
+                        </div>
+                      </div>
+                      {selectedOption?.poolId === option.poolId && (
+                        <div className="text-blue-500">✓</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}
-          {plan && (
+
+          {/* Deposit Preparation */}
+          {selectedOption && !depositSteps.length && (
             <Card>
-              <CardHeader><CardTitle>Plan</CardTitle></CardHeader>
-              <CardContent>
-                <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(plan, null, 2)}</pre>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  <div className="p-4 bg-muted/40 rounded-lg">
+                    <div className="font-semibold mb-2">Selected Option:</div>
+                    <div>{selectedOption.protocol} - {selectedOption.token}</div>
+                    <div className="text-green-600 font-semibold mt-1">
+                      Expected Yield: {selectedOption.apy.toFixed(2)}% APY
+                    </div>
+                  </div>
+                  <Button
+                    onClick={prepareDeposit}
+                    disabled={loading || !isConnected}
+                    className="w-full"
+                  >
+                    {loading ? "Preparing Deposit..." : isConnected ? "Prepare Deposit" : "Connect Wallet First"}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Deposit Steps Preview */}
+          {depositSteps.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Deposit Steps</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {depositSteps.map((step, index) => (
+                  <div
+                    key={index}
+                    className={`p-3 border rounded ${
+                      index < currentStepIndex
+                        ? "bg-green-50 border-green-200"
+                        : index === currentStepIndex
+                        ? "bg-blue-50 border-blue-200"
+                        : "bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">
+                        {index < currentStepIndex ? "✓" : index === currentStepIndex ? "→" : index + 1}.
+                      </span>
+                      <span>{step.description}</span>
+                    </div>
+                    {transactionHashes[index] && (
+                      <div className="mt-2 text-sm">
+                        <a
+                          href={`https://etherscan.io/tx/${transactionHashes[index]}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          View Transaction: {transactionHashes[index].slice(0, 10)}...
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <Button
+                  onClick={executeDeposit}
+                  disabled={isDepositing || !isConnected}
+                  className="w-full"
+                >
+                  {isDepositing
+                    ? `Executing Step ${currentStepIndex + 1} of ${depositSteps.length}...`
+                    : "Execute Deposit"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Success Message */}
+          {transactionHashes.length === depositSteps.length && depositSteps.length > 0 && (
+            <Alert>
+              <AlertDescription>
+                ✅ Deposit completed successfully! Your funds are now earning yield.
+                {transactionHashes.map((hash, i) => (
+                  <div key={i} className="mt-1">
+                    <a
+                      href={`https://etherscan.io/tx/${hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      Transaction {i + 1}: {hash.slice(0, 10)}...{hash.slice(-8)}
+                    </a>
+                  </div>
+                ))}
+              </AlertDescription>
+            </Alert>
           )}
         </div>
       </DialogContent>

@@ -16,7 +16,6 @@ import { WalletConnection } from "@/components/WalletConnection"
 import { SwapDrawer } from "@/components/SwapDrawer"
 import { useSwap } from "@/contexts/SwapContext"
 import { AutopilotModal } from "@/components/AutopilotModal"
-import YieldFarming from "@/app/components/YieldFarming"
 
 const MiniSpark = dynamic(() => import("@/components/MiniSpark"), { 
   ssr: false,
@@ -477,11 +476,6 @@ export default function StablecoinYieldDashboard() {
         </Card>
         <SwapDrawer />
         <AutopilotModal open={autopilotOpen} onOpenChange={setAutopilotOpen} />
-        
-        {/* Yield Farming Section */}
-        <div className="mt-12">
-          <YieldFarming />
-        </div>
       </main>
     </div>
   )
