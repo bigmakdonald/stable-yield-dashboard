@@ -3,9 +3,10 @@
 // PUBLIC, no API keys required
 
 // Ethereum Mainnet addresses only
+// Aave V3 Pool address on Ethereum Mainnet: 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
 export const AAVE_V3_ADDRESSES = {
   ethereum: {
-    PoolAddressesProvider: '0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2' as const,
+    Pool: '0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2' as const, // Aave V3 Pool contract address
     tokens: {
       USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as const,
       USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7' as const,

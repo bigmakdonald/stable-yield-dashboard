@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { AAVE_V3_ADDRESSES, POOL_ADDRESSES_PROVIDER_ABI, POOL_ABI, ERC20_ABI, ETHEREUM_CHAIN_ID } from "@/lib/contracts/aave-v3";
+import { AAVE_V3_ADDRESSES, POOL_ABI, ERC20_ABI, ETHEREUM_CHAIN_ID } from "@/lib/contracts/aave-v3";
 import { getTokenAddress, ETH_SENTINEL } from "@/lib/swap-config";
 import { toBaseUnits } from "@/lib/utils";
 import { encodeFunctionData, parseUnits, createPublicClient, http } from "viem";
@@ -13,16 +13,8 @@ const publicClient = createPublicClient({
   transport: http(),
 });
 
-// Get Aave Pool address
-async function getPoolAddress(): Promise<string> {
-  const poolAddressesProvider = AAVE_V3_ADDRESSES.ethereum.PoolAddressesProvider;
-  const poolAddress = await publicClient.readContract({
-    address: poolAddressesProvider as `0x${string}`,
-    abi: POOL_ADDRESSES_PROVIDER_ABI,
-    functionName: 'getPool',
-  });
-  return poolAddress as string;
-}
+// Aave V3 Pool address on Ethereum Mainnet (hardcoded constant)
+const POOL_ADDRESS = AAVE_V3_ADDRESSES.ethereum.Pool;
 
 // Get token decimals
 async function getTokenDecimals(tokenAddress: string): Promise<number> {
@@ -110,8 +102,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get Aave Pool address
-    const poolAddress = await getPoolAddress();
+    // Use the hardcoded Aave V3 Pool address
+    const poolAddress = POOL_ADDRESS;
     
     // Get token decimals
     const decimals = await getTokenDecimals(tokenAddress);
