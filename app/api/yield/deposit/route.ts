@@ -111,9 +111,12 @@ export async function POST(req: Request) {
       );
     }
     
-    // Verify token address is an Ethereum Mainnet address
+    // Verify token address is an Ethereum Mainnet address (case-insensitive comparison)
     const ethereumTokenAddresses = AAVE_V3_ADDRESSES.ethereum.tokens;
-    const isValidEthereumToken = Object.values(ethereumTokenAddresses).includes(tokenAddress as any);
+    const normalizedTokenAddress = tokenAddress.toLowerCase();
+    const normalizedEthereumAddresses = Object.values(ethereumTokenAddresses).map(addr => String(addr).toLowerCase());
+    const isValidEthereumToken = normalizedEthereumAddresses.includes(normalizedTokenAddress);
+    
     if (!isValidEthereumToken) {
       return NextResponse.json(
         { error: `Token address ${tokenAddress} is not a valid Ethereum Mainnet address` },
